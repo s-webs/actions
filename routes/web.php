@@ -18,3 +18,4 @@ require __DIR__.'/measure.php';
 require __DIR__.'/plan.php';
 require __DIR__.'/approval.php';
 require __DIR__.'/monitoring.php';
+require __DIR__.'/calendar.php';
