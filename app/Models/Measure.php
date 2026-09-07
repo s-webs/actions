@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\MeasureStatus;
 use App\Enums\RiskLevel;
 use Database\Factories\MeasureFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -64,6 +65,25 @@ class Measure extends Model
     public function periodStates(): HasMany
     {
         return $this->hasMany(MeasurePeriodState::class);
+    }
+
+    /**
+     * Состояние за последний (по номеру периода) отчётный период — то, что показывается
+     * как «текущий статус» в реестре ([[Функциональные требования#4.1 Модуль «План» — реестр мероприятий]]).
+     * `status` намеренно не хранится на `measures` — это факт периода, см. task-002.
+     */
+    public function latestPeriodState(): HasOne
+    {
+        return $this->hasOne(MeasurePeriodState::class)->ofMany('period_id', 'max');
+    }
+
+    /**
+     * Статус для отображения: последний зафиксированный факт периода, либо
+     * «не начато» по умолчанию, если ни один период ещё не заведён/не заполнен.
+     */
+    public function currentStatus(): MeasureStatus
+    {
+        return $this->latestPeriodState?->status ?? MeasureStatus::NotStarted;
     }
 
     public function evidences(): HasMany

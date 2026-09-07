@@ -1,13 +1,16 @@
 <?php
 
 use App\Http\Controllers\Plan\MeasureImportController;
+use App\Http\Controllers\Plan\PlanController;
 use Illuminate\Support\Facades\Route;
 
 /**
- * Модуль «План» — реестр мероприятий строится в task-006; здесь пока только импорт
- * (task-005), доступный координатору/проректору — [[Функциональные требования#4.12 Импорт из Excel]].
+ * Модуль «План» — [[Функциональные требования#4.1 Модуль «План» — реестр мероприятий]].
+ * Доступен только guard'у `web` (все три роли на равных правах чтения).
  */
 Route::middleware('auth:web')->group(function () {
+    Route::get('plan', [PlanController::class, 'index'])->name('plan.index');
+
     Route::get('plan/import', [MeasureImportController::class, 'create'])->name('plan.import');
     Route::post('plan/import', [MeasureImportController::class, 'store'])->name('plan.import.store');
 });
