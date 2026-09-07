@@ -51,17 +51,37 @@ class Period extends Model
     }
 
     /**
-     * Открытый период текущего календарного месяца — заводится по требованию (пока нет
-     * планировщика task-018, который будет открывать периоды заранее). Ищем через
-     * `whereDate`, а не `firstOrCreate(['month' => ...])` — `date`-каст хранит колонку
-     * как полную дату-время, и обычный `where('month', 'Y-m-d')` не находит совпадение
-     * (та же ловушка, что в `CalendarFocusSeeder` — task-004).
+     * Открытый период, в который сейчас идёт работа — не обязательно период текущего
+     * календарного месяца. [[Бизнес-правила#Правило 5 · Блокировка закрытого периода]]:
+     * после закрытия периода координатором (обычно 25 числа, до конца календарного
+     * месяца) правки по учётным данным мероприятия «вносятся уже в следующий период» —
+     * то есть остаток месяца до 1-го числа работа идёт уже в периоде *следующего*
+     * месяца, хотя календарно текущий месяц ещё не закончился. Поэтому: берём самый
+     * поздний период; если он закрыт — открываем/заводим период следующего месяца;
+     * если периодов ещё нет вообще — заводим текущий календарный месяц. Возвращаемый
+     * период гарантированно открыт — рабочее место мероприятия (task-007) поэтому
+     * никогда не пишет в закрытый период, без отдельной проверки на его стороне.
+     *
+     * Ищем через `whereDate`/сравнение объектов, а не `firstOrCreate(['month' => ...])`
+     * — `date`-каст хранит колонку как полную дату-время, и обычный
+     * `where('month', 'Y-m-d')` не находит совпадение (та же ловушка, что в
+     * `CalendarFocusSeeder` — task-004).
      */
     public static function current(): self
     {
-        $month = now()->startOfMonth()->toDateString();
+        $latest = static::query()->orderByDesc('month')->first();
 
-        return static::query()->whereDate('month', $month)->first()
-            ?? static::create(['month' => $month, 'state' => PeriodState::Open]);
+        if (! $latest) {
+            return static::create(['month' => now()->startOfMonth()->toDateString(), 'state' => PeriodState::Open]);
+        }
+
+        if ($latest->state !== PeriodState::Closed) {
+            return $latest;
+        }
+
+        $nextMonth = $latest->month->copy()->addMonthNoOverflow()->startOfMonth()->toDateString();
+
+        return static::query()->whereDate('month', $nextMonth)->first()
+            ?? static::create(['month' => $nextMonth, 'state' => PeriodState::Open]);
     }
 }

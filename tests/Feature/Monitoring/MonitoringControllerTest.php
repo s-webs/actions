@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MeasureStatus;
+use App\Enums\PeriodState;
 use App\Models\CalendarFocus;
 use App\Models\Measure;
 use App\Models\Period;
@@ -41,7 +42,10 @@ test('a past, non-current month with no closed snapshot shows a dash', function 
 
 test('a closed period snapshot renders as its status symbol', function () {
     $measure = Measure::factory()->create(['number' => 1]);
-    $period = Period::factory()->create(['month' => $this->nonCurrentMonth.'-01']);
+    // A snapshot only ever exists for a closed period in real flow (task-016) - an open
+    // period with a later month would otherwise make Period::current() treat it as the
+    // live period instead of the one this test means to probe.
+    $period = Period::factory()->create(['month' => $this->nonCurrentMonth.'-01', 'state' => PeriodState::Closed]);
     Snapshot::factory()->create([
         'measure_id' => $measure->id,
         'period_id' => $period->id,

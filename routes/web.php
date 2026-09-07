@@ -22,3 +22,4 @@ require __DIR__.'/calendar.php';
 require __DIR__.'/responsibles.php';
 require __DIR__.'/evidence.php';
 require __DIR__.'/credentials.php';
+require __DIR__.'/periods.php';
