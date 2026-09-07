@@ -6,11 +6,14 @@ use Database\Factories\DirectionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class Direction extends Model
+/** [[Функциональные требования#4.11 Аудит и история изменений]] — task-019. */
+class Direction extends Model implements AuditableContract
 {
     /** @use HasFactory<DirectionFactory> */
-    use HasFactory;
+    use Auditable, HasFactory;
 
     protected $fillable = [
         'number',

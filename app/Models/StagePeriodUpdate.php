@@ -8,11 +8,18 @@ use Database\Factories\StagePeriodUpdateFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class StagePeriodUpdate extends Model
+/**
+ * [[Функциональные требования#4.11 Аудит и история изменений]] — история подач и
+ * утверждений этапа (task-019); дополняет ленту в рабочем месте мероприятия (task-007)
+ * и очереди проверки (task-008), которые уже показывают решение проректора напрямую.
+ */
+class StagePeriodUpdate extends Model implements AuditableContract
 {
     /** @use HasFactory<StagePeriodUpdateFactory> */
-    use HasFactory;
+    use Auditable, HasFactory;
 
     protected $fillable = [
         'measure_stage_id',

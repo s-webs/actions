@@ -12,11 +12,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Notifications\Notifiable;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class Measure extends Model
+/**
+ * [[Функциональные требования#4.11 Аудит и история изменений]] — по каждому изменению
+ * фактических полей кто/когда/старое/новое значение (`owen-it/laravel-auditing`).
+ */
+class Measure extends Model implements AuditableContract
 {
     /** @use HasFactory<MeasureFactory> */
-    use HasFactory, Notifiable;
+    use Auditable, HasFactory, Notifiable;
 
     protected $fillable = [
         'number',

@@ -4,7 +4,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { Archive, BookOpen, Calendar, CalendarClock, ClipboardCheck, ClipboardList, FileText, Folder, KeyRound, LayoutGrid, Users } from 'lucide-react';
+import { Archive, BookOpen, Calendar, CalendarClock, ClipboardCheck, ClipboardList, FileText, Folder, History, KeyRound, LayoutGrid, Users } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -52,6 +52,11 @@ const mainNavItems: NavItem[] = [
         title: 'Закрытие периода',
         url: '/periods',
         icon: Archive,
+    },
+    {
+        title: 'История изменений',
+        url: '/audit',
+        icon: History,
     },
 ];
 

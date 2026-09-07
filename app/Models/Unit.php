@@ -6,11 +6,14 @@ use Database\Factories\UnitFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class Unit extends Model
+/** [[Функциональные требования#4.11 Аудит и история изменений]] — task-019. */
+class Unit extends Model implements AuditableContract
 {
     /** @use HasFactory<UnitFactory> */
-    use HasFactory;
+    use Auditable, HasFactory;
 
     protected $fillable = [
         'name',
