@@ -14,4 +14,10 @@ class MeasurePolicy
     {
         return $user->hasAnyRole(['coordinator', 'proctor']);
     }
+
+    /** Учётные данные мероприятий — [[Функциональные требования#4.14]]. */
+    public function manage(User $user): bool
+    {
+        return $user->hasAnyRole(['coordinator', 'proctor']);
+    }
 }

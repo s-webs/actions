@@ -9,7 +9,6 @@ use App\Models\Evidence;
 use App\Models\Measure;
 use App\Models\Responsible;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
@@ -275,31 +274,12 @@ class MeasureImportService
             return;
         }
 
-        $password = $this->generateReadablePassword();
-        $login = sprintf('M-%02d', $measure->number);
-
-        $measure->credential()->create([
-            'login' => $login,
-            'password_hash' => Hash::make($password),
-        ]);
+        $generated = app(MeasureCredentialGenerator::class)->generate($measure);
 
         $this->credentials[] = [
             'measure_number' => $measure->number,
-            'login' => $login,
-            'password' => $password,
+            'login' => $generated['login'],
+            'password' => $generated['password'],
         ];
-    }
-
-    /**
-     * Без визуально спутываемых символов (0/O, 1/l/I) — читаемый пароль,
-     * см. [[Функциональные требования#4.14 Модуль «Учётные данные мероприятий»]].
-     */
-    private function generateReadablePassword(int $length = 10): string
-    {
-        $alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-
-        return collect(range(1, $length))
-            ->map(fn () => $alphabet[random_int(0, strlen($alphabet) - 1)])
-            ->implode('');
     }
 }
