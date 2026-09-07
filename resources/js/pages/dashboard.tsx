@@ -87,6 +87,12 @@ export default function Dashboard({ kpis, statusBreakdown, directionSummary, upc
             <Head title="Кабинет проректора" />
 
             <div className="flex flex-col gap-6 p-6">
+                <div className="flex justify-end">
+                    <a href={route('reports.dashboard-pdf')} target="_blank" rel="noreferrer" className="text-sm text-primary underline-offset-4 hover:underline">
+                        Экспорт в PDF
+                    </a>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
                     <Card>
                         <CardHeader className="pb-2">

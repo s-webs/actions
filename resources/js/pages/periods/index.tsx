@@ -70,7 +70,14 @@ export default function PeriodsIndex({ period, measureCount, unreviewedCount, un
 
                 {recentSnapshots.length > 0 && (
                     <div>
-                        <h2 className="font-medium">Архив закрытых периодов</h2>
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-medium">Архив закрытых периодов</h2>
+                            {recentSnapshots.length >= 2 && (
+                                <a href={route('periods.compare')} className="text-sm text-primary underline-offset-4 hover:underline">
+                                    Сравнить периоды →
+                                </a>
+                            )}
+                        </div>
                         <ul className="text-muted-foreground mt-2 flex flex-wrap gap-2 text-sm">
                             {recentSnapshots.map((m) => (
                                 <li key={m}>

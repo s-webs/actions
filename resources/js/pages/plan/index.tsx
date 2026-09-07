@@ -100,9 +100,14 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
             <div className="flex flex-col gap-6 p-6">
                 <div className="flex items-center justify-between">
                     <h1 className="text-xl font-medium">План: реестр мероприятий</h1>
-                    <Link href={route('plan.import')} className="text-sm text-primary underline-offset-4 hover:underline">
-                        Импортировать из Excel
-                    </Link>
+                    <div className="flex gap-4">
+                        <a href={route('reports.plan-xlsx')} className="text-sm text-primary underline-offset-4 hover:underline">
+                            Экспорт в xlsx
+                        </a>
+                        <Link href={route('plan.import')} className="text-sm text-primary underline-offset-4 hover:underline">
+                            Импортировать из Excel
+                        </Link>
+                    </div>
                 </div>
 
                 <form onSubmit={submitSearch} className="flex flex-wrap items-end gap-4">

@@ -23,3 +23,4 @@ require __DIR__.'/responsibles.php';
 require __DIR__.'/evidence.php';
 require __DIR__.'/credentials.php';
 require __DIR__.'/periods.php';
+require __DIR__.'/reports.php';

@@ -94,4 +94,46 @@ class PeriodController extends Controller
             ->with('stage.measure')
             ->get();
     }
+
+    /**
+     * Сравнение двух закрытых периодов — [[Функциональные требования#4.9 Отчёты, экспорт и архив срезов]].
+     * Без явных `from`/`to` берутся два последних закрытых периода.
+     */
+    public function compare(Request $request): Response
+    {
+        Gate::authorize('close', Period::class);
+
+        $closed = Period::whereHas('snapshots')->orderByDesc('month')->get();
+
+        $toId = $request->integer('to') ?: $closed->first()?->id;
+        $fromId = $request->integer('from') ?: $closed->skip(1)->first()?->id;
+
+        $comparison = [];
+        if ($fromId && $toId) {
+            $fromSnapshots = Snapshot::where('period_id', $fromId)->get()->keyBy('measure_id');
+            $toSnapshots = Snapshot::where('period_id', $toId)->get()->keyBy('measure_id');
+
+            $comparison = Measure::orderBy('number')->get()->map(function (Measure $m) use ($fromSnapshots, $toSnapshots) {
+                $from = $fromSnapshots->get($m->id);
+                $to = $toSnapshots->get($m->id);
+
+                return [
+                    'number' => $m->number,
+                    'title' => $m->title,
+                    'from_percent' => $from?->percent,
+                    'to_percent' => $to?->percent,
+                    'from_status' => $from?->status?->value,
+                    'to_status' => $to?->status?->value,
+                    'changed' => $from && $to && ($from->percent !== $to->percent || $from->status !== $to->status),
+                ];
+            })->values();
+        }
+
+        return Inertia::render('periods/compare', [
+            'availablePeriods' => $closed->map(fn (Period $p) => ['id' => $p->id, 'month' => $p->month->format('Y-m')])->values(),
+            'fromId' => $fromId,
+            'toId' => $toId,
+            'comparison' => $comparison,
+        ]);
+    }
 }

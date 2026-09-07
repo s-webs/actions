@@ -10,4 +10,5 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:web')->group(function () {
     Route::get('periods', [PeriodController::class, 'index'])->name('periods.index');
     Route::post('periods/close', [PeriodController::class, 'close'])->name('periods.close');
+    Route::get('periods/compare', [PeriodController::class, 'compare'])->name('periods.compare');
 });
