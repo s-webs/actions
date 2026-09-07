@@ -79,12 +79,23 @@ class Measure extends Model
     }
 
     /**
-     * Статус для отображения: последний зафиксированный факт периода, либо
-     * «не начато» по умолчанию, если ни один период ещё не заведён/не заполнен.
+     * Статус для отображения: последний зафиксированный факт периода, либо «не начато»
+     * по умолчанию — плюс живая автопросрочка ([[Бизнес-правила#Правило 1 · Автопросрочка]]):
+     * до появления ежедневной задачи планировщика (task-010) правило применяется здесь
+     * же, при каждом чтении статуса, а не персистится. «Выполнено» просрочку не
+     * перекрывает — при появлении task-010 персистентная пометка станет источником
+     * истины, а этот метод продолжит работать как безопасный дубль на случай, если
+     * задача не успела отработать день в день.
      */
     public function currentStatus(): MeasureStatus
     {
-        return $this->latestPeriodState?->status ?? MeasureStatus::NotStarted;
+        $status = $this->latestPeriodState?->status ?? MeasureStatus::NotStarted;
+
+        if ($status !== MeasureStatus::Done && $this->deadline?->isPast()) {
+            return MeasureStatus::Overdue;
+        }
+
+        return $status;
     }
 
     public function evidences(): HasMany
