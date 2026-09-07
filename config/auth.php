@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\MeasureCredential;
 use App\Models\User;
 
 return [
@@ -42,6 +43,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Неименной вход по логину/паролю мероприятия — [[Роли и права#Доступ к мероприятию (неименной)]].
+        'measure' => [
+            'driver' => 'session',
+            'provider' => 'measure_credentials',
+        ],
     ],
 
     /*
@@ -71,6 +78,11 @@ return [
         //     'driver' => 'database',
         //     'table' => 'users',
         // ],
+
+        'measure_credentials' => [
+            'driver' => 'eloquent',
+            'model' => MeasureCredential::class,
+        ],
     ],
 
     /*

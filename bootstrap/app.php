@@ -17,6 +17,14 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
+
+        // Два guard'а (web — администраторы, measure — рабочее место мероприятия) ведут
+        // на разные экраны входа/старта — различаем по префиксу пути, см.
+        // [[Роли и права]].
+        $middleware->redirectTo(
+            guests: fn ($request) => $request->is('measure/*') ? route('measure.login') : route('login'),
+            users: fn ($request) => $request->is('measure/*') ? route('measure.workspace') : route('dashboard'),
+        );
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
