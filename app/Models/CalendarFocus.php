@@ -11,6 +11,8 @@ class CalendarFocus extends Model
     /** @use HasFactory<CalendarFocusFactory> */
     use HasFactory;
 
+    protected $table = 'calendar_focuses';
+
     protected $fillable = [
         'month',
         'focus_text',
