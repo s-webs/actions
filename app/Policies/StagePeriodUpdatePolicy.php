@@ -12,6 +12,12 @@ use App\Models\User;
  */
 class StagePeriodUpdatePolicy
 {
+    /** Очередь «Этапы на проверку» — [[Функциональные требования#4.13]]. */
+    public function viewAny(User $user): bool
+    {
+        return $user->hasRole('proctor');
+    }
+
     public function approve(User $user, StagePeriodUpdate $stagePeriodUpdate): bool
     {
         return $user->hasRole('proctor');

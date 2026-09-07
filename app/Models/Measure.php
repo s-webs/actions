@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\MeasureStatus;
+use App\Enums\ReviewState;
 use App\Enums\RiskLevel;
 use Database\Factories\MeasureFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -114,5 +115,39 @@ class Measure extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(Assignment::class);
+    }
+
+    /**
+     * Общий `%` = Σ(вес этапа × последний утверждённый `%` этапа) / Σ весов —
+     * [[Бизнес-правила#Правило 2б · Общий `%` мероприятия — взвешенная сумма]]. Для
+     * каждого этапа берётся его последнее *утверждённое* значение (не последний период
+     * вообще — этап в `rework` сохраняет прежний утверждённый `%` до новой проверки).
+     * Пересчитывается кодом при каждом решении проректора (task-008), не хранится как
+     * SQL-агрегат.
+     */
+    public function recalculatePercent(): int
+    {
+        $stages = $this->stages;
+        $totalWeight = $stages->sum('weight');
+
+        if ($totalWeight === 0) {
+            $this->update(['percent' => 0]);
+
+            return 0;
+        }
+
+        $weightedSum = $stages->sum(function (MeasureStage $stage) {
+            $lastApproved = $stage->periodUpdates()
+                ->where('review_state', ReviewState::Approved)
+                ->orderByDesc('approved_at')
+                ->first();
+
+            return $stage->weight * ($lastApproved->approved_percent ?? 0);
+        });
+
+        $percent = (int) round($weightedSum / $totalWeight);
+        $this->update(['percent' => $percent]);
+
+        return $percent;
     }
 }
