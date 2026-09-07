@@ -7,6 +7,7 @@ use App\Enums\RiskLevel;
 use App\Http\Controllers\Controller;
 use App\Models\Evidence;
 use App\Models\StagePeriodUpdate;
+use App\Notifications\StageDecisionMade;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -105,6 +106,8 @@ class ApprovalController extends Controller
             'approved_at' => now(),
         ]);
 
+        $update->stage->measure->notify(new StageDecisionMade($update));
+
         return back()->with('status', 'Этап отклонён.');
     }
 
@@ -121,6 +124,8 @@ class ApprovalController extends Controller
             'approved_by' => $request->user()->id,
             'approved_at' => now(),
         ]);
+
+        $update->stage->measure->notify(new StageDecisionMade($update));
 
         return back()->with('status', 'Возвращено на доработку.');
     }

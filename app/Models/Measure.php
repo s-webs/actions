@@ -11,11 +11,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Notifications\Notifiable;
 
 class Measure extends Model
 {
     /** @use HasFactory<MeasureFactory> */
-    use HasFactory;
+    use HasFactory, Notifiable;
 
     protected $fillable = [
         'number',
@@ -160,5 +161,16 @@ class Measure extends Model
         $this->update(['percent' => $percent]);
 
         return $percent;
+    }
+
+    /**
+     * Адресат уведомлений по мероприятию — [[Функциональные требования#4.10 Уведомления и планировщик]].
+     * `contact_email` не заполняется автоматически нигде (не в xlsx, не в UI) — открытый
+     * вопрос заказчику ([[Техническое задание#11. Допущения и открытые вопросы]]); пока
+     * пусто, уведомление тихо не отправляется (не роняет рассылку остальным).
+     */
+    public function routeNotificationForMail(): ?string
+    {
+        return $this->contact_email;
     }
 }
