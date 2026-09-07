@@ -49,4 +49,19 @@ class Period extends Model
     {
         return $this->hasMany(Snapshot::class);
     }
+
+    /**
+     * Открытый период текущего календарного месяца — заводится по требованию (пока нет
+     * планировщика task-018, который будет открывать периоды заранее). Ищем через
+     * `whereDate`, а не `firstOrCreate(['month' => ...])` — `date`-каст хранит колонку
+     * как полную дату-время, и обычный `where('month', 'Y-m-d')` не находит совпадение
+     * (та же ловушка, что в `CalendarFocusSeeder` — task-004).
+     */
+    public static function current(): self
+    {
+        $month = now()->startOfMonth()->toDateString();
+
+        return static::query()->whereDate('month', $month)->first()
+            ?? static::create(['month' => $month, 'state' => PeriodState::Open]);
+    }
 }
