@@ -16,13 +16,13 @@ class SendRiskDigest extends Command
 {
     protected $signature = 'notifications:risk-digest';
 
-    protected $description = 'Отправить проректору и координатору свод рисков/просрочек за месяц (26 число)';
+    protected $description = 'Отправить администраторам свод рисков/просрочек за месяц (26 число)';
 
     public function handle(DashboardSummaryService $summary): int
     {
         $needsDecision = $summary->build()['needsDecision'];
 
-        $recipients = User::role(['proctor', 'coordinator'])->get();
+        $recipients = User::role(['administrator', 'developer'])->get();
         $recipients->each(fn (User $u) => $u->notify(new RiskDigest($needsDecision)));
 
         $this->info("Отправлено {$recipients->count()} администраторам, ".count($needsDecision).' мероприятий в своде.');

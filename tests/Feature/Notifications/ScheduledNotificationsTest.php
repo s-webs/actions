@@ -21,29 +21,29 @@ test('the input-window command notifies only measures with a contact email', fun
     Notification::assertNotSentTo($withoutContact, InputWindowOpened::class);
 });
 
-test('the risk digest goes to proctors and coordinators but not observers', function () {
+test('the risk digest goes to administrators and developers but not observers', function () {
     Notification::fake();
     $this->seed(RoleSeeder::class);
 
-    $proctor = User::factory()->create();
-    $proctor->assignRole('proctor');
-    $coordinator = User::factory()->create();
-    $coordinator->assignRole('coordinator');
+    $administrator = User::factory()->create();
+    $administrator->assignRole('administrator');
+    $developer = User::factory()->create();
+    $developer->assignRole('developer');
     $observer = User::factory()->create();
     $observer->assignRole('observer');
 
     $this->artisan('notifications:risk-digest')->assertSuccessful();
 
-    Notification::assertSentTo($proctor, RiskDigest::class);
-    Notification::assertSentTo($coordinator, RiskDigest::class);
+    Notification::assertSentTo($administrator, RiskDigest::class);
+    Notification::assertSentTo($developer, RiskDigest::class);
     Notification::assertNotSentTo($observer, RiskDigest::class);
 });
 
 test('stage deadline reminders only fire for stages exactly N days out', function () {
     Notification::fake();
     $this->seed(RoleSeeder::class);
-    $coordinator = User::factory()->create();
-    $coordinator->assignRole('coordinator');
+    $administrator = User::factory()->create();
+    $administrator->assignRole('administrator');
 
     $measure = Measure::factory()->create(['contact_email' => 'contact@example.test']);
     $dueSoon = MeasureStage::factory()->create(['measure_id' => $measure->id, 'planned_date' => now()->addDays(3)]);
@@ -55,5 +55,5 @@ test('stage deadline reminders only fire for stages exactly N days out', functio
     // measure has a second stage ($dueLater) that isn't due within the window yet.
     Notification::assertSentToTimes($measure, StageDeadlineApproaching::class, 1);
     Notification::assertSentTo($measure, StageDeadlineApproaching::class, fn ($n) => $n->toMail($measure)->subject === "Приближается срок этапа — мероприятие №{$measure->number}");
-    Notification::assertSentTo($coordinator, StageDeadlineApproaching::class);
+    Notification::assertSentTo($administrator, StageDeadlineApproaching::class);
 });

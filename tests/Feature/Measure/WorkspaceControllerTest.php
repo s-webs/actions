@@ -176,6 +176,77 @@ test('a disallowed file type is rejected with a validation error', function () {
     expect($stage->evidences()->count())->toBe(0);
 });
 
+test('a measure session can create a stage for its own measure', function () {
+    $measure = Measure::factory()->create();
+    $credential = loginAsMeasure($measure);
+
+    $this->actingAs($credential, 'measure')
+        ->post(route('measure.stages.store'), [
+            'title' => 'Сбор данных',
+            'planned_date' => '2026-10-05',
+            'weight' => 50,
+        ])
+        ->assertRedirect();
+
+    $stage = $measure->stages()->first();
+    expect($stage)->not->toBeNull()
+        ->and($stage->title)->toBe('Сбор данных')
+        ->and($stage->order)->toBe(1);
+});
+
+test('a measure session can edit and delete its own stage', function () {
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'title' => 'Старое', 'weight' => 20]);
+    $credential = loginAsMeasure($measure);
+
+    $this->actingAs($credential, 'measure')
+        ->patch(route('measure.stages.update', $stage), ['title' => 'Новое', 'planned_date' => null, 'weight' => 70])
+        ->assertRedirect();
+
+    expect($stage->fresh()->title)->toBe('Новое')->and($stage->fresh()->weight)->toBe(70);
+
+    $this->actingAs($credential, 'measure')
+        ->delete(route('measure.stages.destroy', $stage))
+        ->assertRedirect();
+
+    expect(MeasureStage::find($stage->id))->toBeNull();
+});
+
+test('a measure session cannot edit or delete a stage belonging to another measure', function () {
+    $ownMeasure = Measure::factory()->create();
+    $otherMeasure = Measure::factory()->create();
+    $otherStage = MeasureStage::factory()->create(['measure_id' => $otherMeasure->id]);
+    $credential = loginAsMeasure($ownMeasure);
+
+    $this->actingAs($credential, 'measure')
+        ->patch(route('measure.stages.update', $otherStage), ['title' => 'X', 'weight' => 10])
+        ->assertForbidden();
+
+    $this->actingAs($credential, 'measure')
+        ->delete(route('measure.stages.destroy', $otherStage))
+        ->assertForbidden();
+
+    expect(MeasureStage::find($otherStage->id))->not->toBeNull();
+});
+
+test('a measure session cannot delete its own stage once it has approved history', function () {
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $period = Period::factory()->create();
+    StagePeriodUpdate::factory()->create([
+        'measure_stage_id' => $stage->id,
+        'period_id' => $period->id,
+        'review_state' => ReviewState::Approved,
+    ]);
+    $credential = loginAsMeasure($measure);
+
+    $this->actingAs($credential, 'measure')
+        ->delete(route('measure.stages.destroy', $stage))
+        ->assertSessionHasErrors('stage');
+
+    expect(MeasureStage::find($stage->id))->not->toBeNull();
+});
+
 test('the change log only shows changes for this measure, not another one', function () {
     $measure = Measure::factory()->create(['title' => 'Своё мероприятие']);
     $otherMeasure = Measure::factory()->create(['title' => 'Чужое мероприятие']);

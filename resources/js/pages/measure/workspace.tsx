@@ -145,6 +145,105 @@ const REVIEW_LABELS: Record<ReviewState, string> = {
 
 const ACCEPTED_FILE_EXTENSIONS = '.doc,.docx,.pdf,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg,.tif,.tiff,.heic,.heif';
 
+function StageEditForm({ stage, onDone }: { stage: Stage; onDone: () => void }) {
+    const { data, setData, patch, processing, errors } = useForm({
+        title: stage.title,
+        planned_date: stage.planned_date ?? '',
+        weight: String(stage.weight),
+    });
+
+    function submit(e: FormEvent) {
+        e.preventDefault();
+        patch(route('measure.stages.update', stage.id), { preserveScroll: true, onSuccess: onDone });
+    }
+
+    return (
+        <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-md bg-muted/40 p-3 text-sm">
+            <div className="grid gap-1">
+                <Label>Название этапа</Label>
+                <Input className="w-56" value={data.title} onChange={(e) => setData('title', e.target.value)} />
+                {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+            </div>
+            <div className="grid gap-1">
+                <Label>Плановая дата</Label>
+                <Input type="date" className="w-40" value={data.planned_date} onChange={(e) => setData('planned_date', e.target.value)} />
+                {errors.planned_date && <p className="text-xs text-destructive">{errors.planned_date}</p>}
+            </div>
+            <div className="grid gap-1">
+                <Label>Вес, %</Label>
+                <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    className="w-24"
+                    value={data.weight}
+                    onChange={(e) => setData('weight', e.target.value)}
+                />
+                {errors.weight && <p className="text-xs text-destructive">{errors.weight}</p>}
+            </div>
+            <Button type="submit" size="sm" disabled={processing}>
+                Сохранить
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+                Отмена
+            </Button>
+        </form>
+    );
+}
+
+function AddStageForm() {
+    const { data, setData, post, processing, errors, reset } = useForm({
+        title: '',
+        planned_date: '',
+        weight: '',
+    });
+
+    function submit(e: FormEvent) {
+        e.preventDefault();
+        post(route('measure.stages.store'), { preserveScroll: true, onSuccess: () => reset() });
+    }
+
+    return (
+        <section className="flex flex-col gap-3 rounded-lg border border-dashed p-4">
+            <h2 className="font-medium">Добавить этап</h2>
+            <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+                <div className="grid gap-1">
+                    <Label htmlFor="new-stage-title">Название этапа</Label>
+                    <Input id="new-stage-title" className="w-64" value={data.title} onChange={(e) => setData('title', e.target.value)} />
+                    {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+                </div>
+                <div className="grid gap-1">
+                    <Label htmlFor="new-stage-date">Плановая дата</Label>
+                    <Input
+                        id="new-stage-date"
+                        type="date"
+                        className="w-40"
+                        value={data.planned_date}
+                        onChange={(e) => setData('planned_date', e.target.value)}
+                    />
+                    {errors.planned_date && <p className="text-xs text-destructive">{errors.planned_date}</p>}
+                </div>
+                <div className="grid gap-1">
+                    <Label htmlFor="new-stage-weight">Вес, %</Label>
+                    <Input
+                        id="new-stage-weight"
+                        type="number"
+                        min={1}
+                        max={100}
+                        className="w-24"
+                        value={data.weight}
+                        onChange={(e) => setData('weight', e.target.value)}
+                    />
+                    {errors.weight && <p className="text-xs text-destructive">{errors.weight}</p>}
+                </div>
+                <Button type="submit" size="sm" disabled={processing}>
+                    Добавить этап
+                </Button>
+            </form>
+        </section>
+    );
+}
+
 function EvidenceUploader({ stageId }: { stageId: number }) {
     const [file, setFile] = useState<File | null>(null);
     const [url, setUrl] = useState('');
@@ -197,6 +296,7 @@ function EvidenceUploader({ stageId }: { stageId: number }) {
  * [[Функциональные требования#4.7 Рабочее место мероприятия]].
  */
 export default function Workspace({ measure, period, measureState, stages, history, changeLog }: WorkspaceProps) {
+    const [editingStageId, setEditingStageId] = useState<number | null>(null);
     const { data, setData, patch, transform, processing, errors } = useForm({
         measure_status: measureState.status,
         risk_text: measureState.risk_text ?? '',
@@ -305,11 +405,33 @@ export default function Workspace({ measure, period, measureState, stages, histo
                             <h2 className="font-medium">
                                 Этап {stage.order}. {stage.title}
                             </h2>
-                            <Badge variant="outline">{REVIEW_LABELS[reviewState]}</Badge>
+                            <div className="flex items-center gap-2">
+                                <Badge variant="outline">{REVIEW_LABELS[reviewState]}</Badge>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => setEditingStageId(stage.id)}>
+                                    Изменить
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        if (confirm(`Удалить этап «${stage.title}»?`)) {
+                                            router.delete(route('measure.stages.destroy', stage.id), { preserveScroll: true });
+                                        }
+                                    }}
+                                >
+                                    Удалить
+                                </Button>
+                            </div>
                         </div>
-                        <p className="text-muted-foreground text-sm">
-                            Плановая дата: {stage.planned_date ?? '—'} · Вес: {stage.weight}%
-                        </p>
+
+                        {editingStageId === stage.id ? (
+                            <StageEditForm stage={stage} onDone={() => setEditingStageId(null)} />
+                        ) : (
+                            <p className="text-muted-foreground text-sm">
+                                Плановая дата: {stage.planned_date ?? '—'} · Вес: {stage.weight}%
+                            </p>
+                        )}
 
                         {stage.update?.review_comment && (
                             <p className="rounded-md bg-muted p-2 text-sm">Комментарий проректора: {stage.update.review_comment}</p>
@@ -362,6 +484,8 @@ export default function Workspace({ measure, period, measureState, stages, histo
                     </section>
                 );
             })}
+
+            <AddStageForm />
 
             <section className="flex flex-col gap-4 rounded-lg border p-4">
                 <div className="grid gap-2">

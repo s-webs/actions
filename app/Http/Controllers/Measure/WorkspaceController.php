@@ -7,6 +7,7 @@ use App\Enums\MeasureStatus;
 use App\Enums\ReviewState;
 use App\Enums\SubmittedVia;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Plan\MeasureStageController;
 use App\Models\Measure;
 use App\Models\MeasureCredential;
 use App\Models\MeasurePeriodState;
@@ -249,6 +250,71 @@ class WorkspaceController extends Controller
         ]);
 
         return back()->with('status', 'Документ добавлен.');
+    }
+
+    /**
+     * Заведение этапов — раньше было исключительно веб-администраторским действием
+     * (координатор наполняет план), но по решению заказчика координатор больше не
+     * отдельная веб-учётка: структуру этапов и веса теперь заводит тот, у кого логин
+     * и пароль мероприятия ([[Роли и права#Доступ к мероприятию (неименной)]]). Веб-
+     * администратор сохраняет ту же возможность как оверрайд —
+     * {@see MeasureStageController}.
+     */
+    public function storeStage(Request $request): RedirectResponse
+    {
+        $measure = $this->currentMeasure();
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'planned_date' => ['nullable', 'date'],
+            'weight' => ['required', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $order = ((int) $measure->stages()->max('order')) + 1;
+
+        $measure->stages()->create([...$data, 'order' => $order]);
+
+        return back()->with('status', 'Этап добавлен.');
+    }
+
+    public function updateStage(Request $request, MeasureStage $stage): RedirectResponse
+    {
+        $measure = $this->currentMeasure();
+
+        if ($stage->measure_id !== $measure->id) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'planned_date' => ['nullable', 'date'],
+            'weight' => ['required', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $stage->update($data);
+
+        return back()->with('status', 'Этап обновлён.');
+    }
+
+    public function destroyStage(MeasureStage $stage): RedirectResponse
+    {
+        $measure = $this->currentMeasure();
+
+        if ($stage->measure_id !== $measure->id) {
+            abort(403);
+        }
+
+        $hasApprovedHistory = $stage->periodUpdates()->where('review_state', ReviewState::Approved)->exists();
+
+        if ($hasApprovedHistory) {
+            throw ValidationException::withMessages([
+                'stage' => 'У этапа уже есть подтверждённые проректором отчёты — удаление разрушило бы историю выполнения.',
+            ]);
+        }
+
+        $stage->delete();
+
+        return back()->with('status', 'Этап удалён.');
     }
 
     private function currentMeasure(): Measure

@@ -10,8 +10,8 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
-    $this->coordinator = User::factory()->create();
-    $this->coordinator->assignRole('coordinator');
+    $this->administrator = User::factory()->create();
+    $this->administrator->assignRole('administrator');
 });
 
 test('comparing two periods flags a measure whose percent or status changed', function () {
@@ -21,7 +21,7 @@ test('comparing two periods flags a measure whose percent or status changed', fu
     Snapshot::factory()->create(['measure_id' => $measure->id, 'period_id' => $periodA->id, 'percent' => 20, 'status' => MeasureStatus::InProgress]);
     Snapshot::factory()->create(['measure_id' => $measure->id, 'period_id' => $periodB->id, 'percent' => 60, 'status' => MeasureStatus::InProgress]);
 
-    $this->actingAs($this->coordinator)
+    $this->actingAs($this->administrator)
         ->get(route('periods.compare', ['from' => $periodA->id, 'to' => $periodB->id]))
         ->assertInertia(fn (Assert $page) => $page
             ->where('comparison.0.from_percent', 20)
@@ -36,7 +36,7 @@ test('an unchanged measure is not flagged', function () {
     Snapshot::factory()->create(['measure_id' => $measure->id, 'period_id' => $periodA->id, 'percent' => 40, 'status' => MeasureStatus::InProgress]);
     Snapshot::factory()->create(['measure_id' => $measure->id, 'period_id' => $periodB->id, 'percent' => 40, 'status' => MeasureStatus::InProgress]);
 
-    $this->actingAs($this->coordinator)
+    $this->actingAs($this->administrator)
         ->get(route('periods.compare', ['from' => $periodA->id, 'to' => $periodB->id]))
         ->assertInertia(fn (Assert $page) => $page->where('comparison.0.changed', false));
 });

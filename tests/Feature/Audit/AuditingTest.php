@@ -28,12 +28,12 @@ test('updating a measure field records an audit entry with old and new values', 
 
 test('a change made by an admin (web guard) is attributed to that user', function () {
     $this->seed(RoleSeeder::class);
-    $proctor = User::factory()->create();
-    $proctor->assignRole('proctor');
+    $administrator = User::factory()->create();
+    $administrator->assignRole('administrator');
 
     $stage = MeasureStage::factory()->create();
 
-    $this->actingAs($proctor);
+    $this->actingAs($administrator);
     $stage->update(['title' => 'Переименованный этап']);
 
     $audit = Audit::where('auditable_type', MeasureStage::class)
@@ -42,7 +42,7 @@ test('a change made by an admin (web guard) is attributed to that user', functio
         ->orderByDesc('id')
         ->first();
 
-    expect($audit->user_id)->toBe($proctor->id)
+    expect($audit->user_id)->toBe($administrator->id)
         ->and($audit->user_type)->toBe(User::class);
 });
 

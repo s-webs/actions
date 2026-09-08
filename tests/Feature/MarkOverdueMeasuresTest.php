@@ -38,14 +38,14 @@ test('a measure not yet due is left alone', function () {
 
 test('marking overdue makes the plan registry SQL filter see it too, not just the live display', function () {
     $this->seed(RoleSeeder::class);
-    $proctor = User::factory()->create();
-    $proctor->assignRole('proctor');
+    $administrator = User::factory()->create();
+    $administrator->assignRole('administrator');
 
     $measure = Measure::factory()->create(['deadline' => now()->subDay()]);
 
     $this->artisan('measures:mark-overdue');
 
-    $this->actingAs($proctor)
+    $this->actingAs($administrator)
         ->get(route('plan.index', ['status' => 'overdue']))
         ->assertInertia(fn ($page) => $page->where('measures.data.0.number', $measure->number));
 });

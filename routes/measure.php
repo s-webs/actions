@@ -23,6 +23,10 @@ Route::middleware('auth:measure')->group(function () {
     Route::post('measure/workspace/stages/{stage}/evidence', [WorkspaceController::class, 'storeEvidence'])
         ->name('measure.workspace.evidence');
 
+    Route::post('measure/stages', [WorkspaceController::class, 'storeStage'])->name('measure.stages.store');
+    Route::patch('measure/stages/{stage}', [WorkspaceController::class, 'updateStage'])->name('measure.stages.update');
+    Route::delete('measure/stages/{stage}', [WorkspaceController::class, 'destroyStage'])->name('measure.stages.destroy');
+
     Route::post('measure/logout', [MeasureAuthenticatedSessionController::class, 'destroy'])
         ->name('measure.logout');
 });

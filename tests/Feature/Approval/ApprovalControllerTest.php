@@ -13,10 +13,10 @@ use Database\Seeders\RoleSeeder;
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
-    $this->proctor = User::factory()->create();
-    $this->proctor->assignRole('proctor');
-    $this->coordinator = User::factory()->create();
-    $this->coordinator->assignRole('coordinator');
+    $this->administrator = User::factory()->create();
+    $this->administrator->assignRole('administrator');
+    $this->observer = User::factory()->create();
+    $this->observer->assignRole('observer');
 });
 
 function submittedUpdate(array $stageAttrs = [], array $updateAttrs = []): StagePeriodUpdate
@@ -32,19 +32,19 @@ function submittedUpdate(array $stageAttrs = [], array $updateAttrs = []): Stage
     ], $updateAttrs));
 }
 
-test('a coordinator cannot view or act on the approval queue', function () {
+test('an observer cannot view or act on the approval queue', function () {
     $update = submittedUpdate();
 
-    $this->actingAs($this->coordinator)->get(route('approval.index'))->assertForbidden();
-    $this->actingAs($this->coordinator)
+    $this->actingAs($this->observer)->get(route('approval.index'))->assertForbidden();
+    $this->actingAs($this->observer)
         ->post(route('approval.approve', $update), ['approved_percent' => 50])
         ->assertForbidden();
 });
 
-test('the proctor cannot approve 100 percent without an attached document', function () {
+test('the administrator cannot approve 100 percent without an attached document', function () {
     $update = submittedUpdate();
 
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->post(route('approval.approve', $update), ['approved_percent' => 100])
         ->assertSessionHasErrors('approved_percent');
 
@@ -64,12 +64,12 @@ test('approving with evidence recalculates the measure percent from stage weight
     ]);
     Evidence::factory()->create(['measure_id' => $measure->id, 'measure_stage_id' => $stageA->id, 'period_id' => $period->id, 'type' => EvidenceType::Link]);
 
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->post(route('approval.approve', $updateA), ['approved_percent' => 100])
         ->assertRedirect();
 
     expect($updateA->fresh()->review_state)->toBe(ReviewState::Approved)
-        ->and($updateA->fresh()->approved_by)->toBe($this->proctor->id)
+        ->and($updateA->fresh()->approved_by)->toBe($this->administrator->id)
         // stage A approved at 100% (weight 40), stage B never approved (weight 60, counts as 0):
         // (40*100 + 60*0) / 100 = 40
         ->and($measure->fresh()->percent)->toBe(40);
@@ -81,7 +81,7 @@ test('approving with evidence recalculates the measure percent from stage weight
     ]);
     Evidence::factory()->create(['measure_id' => $measure->id, 'measure_stage_id' => $stageB->id, 'period_id' => $period->id, 'type' => EvidenceType::Link]);
 
-    $this->actingAs($this->proctor)->post(route('approval.approve', $updateB), ['approved_percent' => 50]);
+    $this->actingAs($this->administrator)->post(route('approval.approve', $updateB), ['approved_percent' => 50]);
 
     // (40*100 + 60*50) / 100 = 70
     expect($measure->fresh()->percent)->toBe(70);
@@ -99,7 +99,7 @@ test('a rejected or reworked stage keeps its last approved percent sticky', func
         'review_state' => ReviewState::Submitted,
     ]);
     Evidence::factory()->create(['measure_id' => $measure->id, 'measure_stage_id' => $stage->id, 'period_id' => $period1->id, 'type' => EvidenceType::Link]);
-    $this->actingAs($this->proctor)->post(route('approval.approve', $firstUpdate), ['approved_percent' => 60]);
+    $this->actingAs($this->administrator)->post(route('approval.approve', $firstUpdate), ['approved_percent' => 60]);
     expect($measure->fresh()->percent)->toBe(60);
 
     $secondUpdate = StagePeriodUpdate::factory()->create([
@@ -107,7 +107,7 @@ test('a rejected or reworked stage keeps its last approved percent sticky', func
         'period_id' => $period2->id,
         'review_state' => ReviewState::Submitted,
     ]);
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->post(route('approval.rework', $secondUpdate), ['review_comment' => 'Нужны подробности'])
         ->assertRedirect();
 
@@ -118,9 +118,9 @@ test('a rejected or reworked stage keeps its last approved percent sticky', func
 test('rejecting requires a comment and does not change the approved percent', function () {
     $update = submittedUpdate();
 
-    $this->actingAs($this->proctor)->post(route('approval.reject', $update))->assertSessionHasErrors('review_comment');
+    $this->actingAs($this->administrator)->post(route('approval.reject', $update))->assertSessionHasErrors('review_comment');
 
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->post(route('approval.reject', $update), ['review_comment' => 'Не соответствует плану'])
         ->assertRedirect();
 
@@ -132,9 +132,9 @@ test('an already-decided stage cannot be re-approved', function () {
     $update = submittedUpdate();
     Evidence::factory()->create(['measure_id' => $update->stage->measure_id, 'measure_stage_id' => $update->measure_stage_id, 'period_id' => $update->period_id, 'type' => EvidenceType::Link]);
 
-    $this->actingAs($this->proctor)->post(route('approval.approve', $update), ['approved_percent' => 100]);
+    $this->actingAs($this->administrator)->post(route('approval.approve', $update), ['approved_percent' => 100]);
 
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->post(route('approval.approve', $update), ['approved_percent' => 50])
         ->assertSessionHasErrors();
 });
@@ -150,7 +150,7 @@ test('the queue prioritises an overdue stage over a merely high-risk measure', f
         'review_state' => ReviewState::Submitted,
     ]);
 
-    $response = $this->actingAs($this->proctor)->get(route('approval.index'));
+    $response = $this->actingAs($this->administrator)->get(route('approval.index'));
 
     $response->assertInertia(fn ($page) => $page->where('updates.0.id', $overdueStage->id));
 });

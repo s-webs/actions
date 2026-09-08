@@ -18,7 +18,7 @@ class SendStageDeadlineReminders extends Command
 {
     protected $signature = 'notifications:stage-deadlines {--days=3 : За сколько дней до плановой даты напоминать}';
 
-    protected $description = 'Напомнить о приближающейся плановой дате этапа (контакт мероприятия + координатор)';
+    protected $description = 'Напомнить о приближающейся плановой дате этапа (контакт мероприятия + администраторы)';
 
     public function handle(): int
     {
@@ -26,11 +26,11 @@ class SendStageDeadlineReminders extends Command
         $targetDate = now()->addDays($days)->toDateString();
 
         $stages = MeasureStage::whereDate('planned_date', $targetDate)->with('measure')->get();
-        $coordinators = User::role('coordinator')->get();
+        $administrators = User::role(['administrator', 'developer'])->get();
 
         foreach ($stages as $stage) {
             $stage->measure->notify(new StageDeadlineApproaching($stage));
-            Notification::send($coordinators, new StageDeadlineApproaching($stage));
+            Notification::send($administrators, new StageDeadlineApproaching($stage));
         }
 
         $this->info("Напоминаний отправлено по {$stages->count()} этапам (за {$days} дн. до {$targetDate}).");

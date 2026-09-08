@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Plan;
 
 use App\Enums\ReviewState;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Measure\WorkspaceController;
 use App\Models\Measure;
 use App\Models\MeasureStage;
 use Illuminate\Http\RedirectResponse;
@@ -12,12 +13,12 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Управление этапами мероприятия — координатор/проректор заводят этапы вручную
- * при наполнении плана ([[Функциональные требования#4.1.2]]); импорт (task-005)
- * намеренно не создаёт этапы сам, так как их структура не следует из xlsx напрямую.
- * Без этапов у мероприятия рабочее место (`measure/workspace`) не показывает ни
- * одной формы отчёта, поэтому это действие — обязательный шаг перед тем, как
- * выдавать координатору мероприятия учётные данные.
+ * Управление этапами мероприятия — веб-сторона (роль `administrator`), структурный
+ * оверрайд ([[Роли и права#Матрица]]: «проректор может выполнить любое действие
+ * координатора»). Основной способ завести этапы — логин/пароль самого мероприятия
+ * ({@see WorkspaceController::storeStage()}), этот
+ * контроллер даёт администратору ту же возможность без входа под учётными данными
+ * мероприятия — например, чтобы поправить веса нескольких мероприятий подряд.
  */
 class MeasureStageController extends Controller
 {

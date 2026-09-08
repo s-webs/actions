@@ -45,7 +45,7 @@ class EvidenceController extends Controller
             'evidences' => $evidences,
             'measures' => Measure::orderBy('number')->get(['id', 'number', 'title']),
             'filters' => $request->only(['measure_id', 'period_id', 'form']),
-            'canDelete' => $request->user()->hasAnyRole(['coordinator', 'proctor']),
+            'canDelete' => $request->user()->hasAnyRole(['administrator', 'developer']),
         ]);
     }
 

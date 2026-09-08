@@ -14,8 +14,8 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
-    $this->proctor = User::factory()->create();
-    $this->proctor->assignRole('proctor');
+    $this->administrator = User::factory()->create();
+    $this->administrator->assignRole('administrator');
 });
 
 test('a measure-guard session cannot reach the plan registry', function () {
@@ -25,7 +25,7 @@ test('a measure-guard session cannot reach the plan registry', function () {
 test('a measure with no period state shows as not started by default', function () {
     Measure::factory()->create(['number' => 1]);
 
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->get(route('plan.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('plan/index')
@@ -48,11 +48,11 @@ test('the status filter reflects the latest period, not an earlier one', functio
         'status' => MeasureStatus::Done,
     ]);
 
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->get(route('plan.index', ['status' => MeasureStatus::Done->value]))
         ->assertInertia(fn (Assert $page) => $page->where('measures.data', fn ($data) => count($data) === 1));
 
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->get(route('plan.index', ['status' => MeasureStatus::AtRisk->value]))
         ->assertInertia(fn (Assert $page) => $page->where('measures.data', fn ($data) => count($data) === 0));
 });
@@ -69,7 +69,7 @@ test('the has_stages_to_review filter matches measures with a submitted stage', 
     ]);
     MeasureStage::factory()->create(['measure_id' => $withoutReview->id]);
 
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->get(route('plan.index', ['has_stages_to_review' => '1']))
         ->assertInertia(fn (Assert $page) => $page
             ->where('measures.data', fn ($data) => count($data) === 1)
@@ -80,7 +80,7 @@ test('the risk level filter narrows the registry', function () {
     Measure::factory()->create(['number' => 1, 'risk_level' => RiskLevel::High]);
     Measure::factory()->create(['number' => 2, 'risk_level' => RiskLevel::Low]);
 
-    $this->actingAs($this->proctor)
+    $this->actingAs($this->administrator)
         ->get(route('plan.index', ['risk_level' => RiskLevel::High->value]))
         ->assertInertia(fn (Assert $page) => $page
             ->where('measures.data', fn ($data) => count($data) === 1)

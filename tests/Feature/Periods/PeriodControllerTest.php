@@ -16,15 +16,15 @@ use Database\Seeders\RoleSeeder;
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
-    $this->coordinator = User::factory()->create();
-    $this->coordinator->assignRole('coordinator');
-    $this->proctor = User::factory()->create();
-    $this->proctor->assignRole('proctor');
+    $this->administrator = User::factory()->create();
+    $this->administrator->assignRole('administrator');
+    $this->observer = User::factory()->create();
+    $this->observer->assignRole('observer');
 });
 
-test('a proctor cannot close a period even though they can do most coordinator actions', function () {
-    $this->actingAs($this->proctor)->get(route('periods.index'))->assertForbidden();
-    $this->actingAs($this->proctor)->post(route('periods.close'))->assertForbidden();
+test('an observer cannot close a period', function () {
+    $this->actingAs($this->observer)->get(route('periods.index'))->assertForbidden();
+    $this->actingAs($this->observer)->post(route('periods.close'))->assertForbidden();
 });
 
 test('closing the period snapshots every measure with its current percent, status, and risk level', function () {
@@ -32,7 +32,7 @@ test('closing the period snapshots every measure with its current percent, statu
     $period = Period::current();
     MeasurePeriodState::factory()->create(['measure_id' => $measure->id, 'period_id' => $period->id, 'status' => MeasureStatus::InProgress]);
 
-    $this->actingAs($this->coordinator)->post(route('periods.close'))->assertRedirect();
+    $this->actingAs($this->administrator)->post(route('periods.close'))->assertRedirect();
 
     $snapshot = Snapshot::where('measure_id', $measure->id)->where('period_id', $period->id)->first();
     expect($snapshot)->not->toBeNull()
@@ -41,14 +41,14 @@ test('closing the period snapshots every measure with its current percent, statu
         ->and($snapshot->risk_level)->toBe(RiskLevel::Medium);
 
     expect($period->fresh()->state)->toBe(PeriodState::Closed)
-        ->and($period->fresh()->closed_by)->toBe($this->coordinator->id);
+        ->and($period->fresh()->closed_by)->toBe($this->administrator->id);
 });
 
 test('once a period is closed, the measure workspace rolls forward to the next month rather than reopening it', function () {
     $measure = Measure::factory()->create();
     $closingPeriod = Period::current();
 
-    $this->actingAs($this->coordinator)->post(route('periods.close'));
+    $this->actingAs($this->administrator)->post(route('periods.close'));
 
     $nextPeriod = Period::current();
     expect($nextPeriod->id)->not->toBe($closingPeriod->id)
@@ -72,7 +72,7 @@ test('stages still submitted or in rework at close time are reported as unreview
         'review_state' => ReviewState::Submitted,
     ]);
 
-    $this->actingAs($this->coordinator)
+    $this->actingAs($this->administrator)
         ->get(route('periods.index'))
         ->assertInertia(fn ($page) => $page
             ->where('unreviewedCount', 1)

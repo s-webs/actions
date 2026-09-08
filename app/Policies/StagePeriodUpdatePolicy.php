@@ -7,7 +7,7 @@ use App\Models\User;
 
 /**
  * `%` этапа и решение (утвердить/отклонить/на доработку) — единственная точка входа
- * процента в систему, только у проректора. Guard `measure` сюда не допускается вообще —
+ * процента в систему, роль `administrator`. Guard `measure` сюда не допускается вообще —
  * [[Бизнес-правила#Правило 2а · `%` появляется только через утверждение проректором]].
  */
 class StagePeriodUpdatePolicy
@@ -15,11 +15,11 @@ class StagePeriodUpdatePolicy
     /** Очередь «Этапы на проверку» — [[Функциональные требования#4.13]]. */
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('proctor');
+        return $user->hasRole('administrator');
     }
 
     public function approve(User $user, StagePeriodUpdate $stagePeriodUpdate): bool
     {
-        return $user->hasRole('proctor');
+        return $user->hasRole('administrator');
     }
 }

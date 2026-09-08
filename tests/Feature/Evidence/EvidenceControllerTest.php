@@ -10,8 +10,8 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
-    $this->coordinator = User::factory()->create();
-    $this->coordinator->assignRole('coordinator');
+    $this->administrator = User::factory()->create();
+    $this->administrator->assignRole('administrator');
     $this->observer = User::factory()->create();
     $this->observer->assignRole('observer');
 });
@@ -22,18 +22,18 @@ test('the registry lists evidence across measures and can filter to one measure'
     Evidence::factory()->create(['measure_id' => $measureA->id, 'title' => 'Приказ A']);
     Evidence::factory()->create(['measure_id' => $measureB->id, 'title' => 'Приказ B']);
 
-    $this->actingAs($this->coordinator)
+    $this->actingAs($this->administrator)
         ->get(route('evidence.index'))
         ->assertInertia(fn (Assert $page) => $page->where('evidences.total', 2));
 
-    $this->actingAs($this->coordinator)
+    $this->actingAs($this->administrator)
         ->get(route('evidence.index', ['measure_id' => $measureA->id]))
         ->assertInertia(fn (Assert $page) => $page
             ->where('evidences.total', 1)
             ->where('evidences.data.0.title', 'Приказ A'));
 });
 
-test('a coordinator can delete evidence and its stored file', function () {
+test('an administrator can delete evidence and its stored file', function () {
     Storage::fake('public');
     $path = 'evidence/1/order.pdf';
     Storage::disk('public')->put($path, 'contents');
@@ -41,7 +41,7 @@ test('a coordinator can delete evidence and its stored file', function () {
     $measure = Measure::factory()->create();
     $evidence = Evidence::factory()->create(['measure_id' => $measure->id, 'type' => EvidenceType::File, 'path_or_url' => $path]);
 
-    $this->actingAs($this->coordinator)->delete(route('evidence.destroy', $evidence))->assertRedirect();
+    $this->actingAs($this->administrator)->delete(route('evidence.destroy', $evidence))->assertRedirect();
 
     expect(Evidence::find($evidence->id))->toBeNull();
     Storage::disk('public')->assertMissing($path);

@@ -2,22 +2,26 @@
 
 namespace App\Policies;
 
+use App\Http\Controllers\Measure\WorkspaceController;
 use App\Models\User;
 
 /**
- * Импорт (первичный и повторный) — координатор наполняет план; проректор может
- * выполнить любое действие координатора — [[Роли и права#Администраторы]].
+ * Импорт и наполнение плана — роль `administrator` (слияние бывших `coordinator` и
+ * `proctor` — [[Роли и права#Администраторы]]). Заведение самих этапов теперь доступно
+ * и с логина мероприятия ({@see WorkspaceController}) —
+ * это Policy покрывает только веб-администраторскую сторону (импорт, учётные данные,
+ * структурный оверрайд).
  */
 class MeasurePolicy
 {
     public function import(User $user): bool
     {
-        return $user->hasAnyRole(['coordinator', 'proctor']);
+        return $user->hasRole('administrator');
     }
 
-    /** Учётные данные мероприятий — [[Функциональные требования#4.14]]. */
+    /** Учётные данные мероприятий, структурный оверрайд этапов — [[Функциональные требования#4.14]]. */
     public function manage(User $user): bool
     {
-        return $user->hasAnyRole(['coordinator', 'proctor']);
+        return $user->hasRole('administrator');
     }
 }

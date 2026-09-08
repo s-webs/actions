@@ -31,7 +31,7 @@ export default function MeasureLogin({ status }: MeasureLoginProps) {
     };
 
     return (
-        <AuthLayout title="Вход в мероприятие" description="Логин и пароль выданы координатором или проректором">
+        <AuthLayout title="Вход в мероприятие" description="Логин и пароль выданы администратором">
             <Head title="Вход в мероприятие" />
 
             <form className="flex flex-col gap-6" onSubmit={submit}>

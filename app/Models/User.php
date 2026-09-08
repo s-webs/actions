@@ -10,8 +10,9 @@ use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
 /**
- * Guard `web` — именные администраторы: роли `proctor` / `coordinator` / `observer`
- * ([[Роли и права#Администраторы]]).
+ * Guard `web` — именные администраторы: роли `developer` / `administrator` / `observer`
+ * ([[Роли и права#Администраторы]]). `developer` проходит любую Policy-проверку без
+ * исключений — см. `Gate::before` в `AppServiceProvider`.
  */
 class User extends Authenticatable
 {

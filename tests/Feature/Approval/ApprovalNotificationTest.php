@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Notification;
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
-    $this->proctor = User::factory()->create();
-    $this->proctor->assignRole('proctor');
+    $this->administrator = User::factory()->create();
+    $this->administrator->assignRole('administrator');
 });
 
 test('rejecting a stage notifies the measure contact', function () {
@@ -28,7 +28,7 @@ test('rejecting a stage notifies the measure contact', function () {
         'review_state' => 'submitted',
     ]);
 
-    $this->actingAs($this->proctor)->post(route('approval.reject', $update), ['review_comment' => 'Недостаточно данных']);
+    $this->actingAs($this->administrator)->post(route('approval.reject', $update), ['review_comment' => 'Недостаточно данных']);
 
     Notification::assertSentTo($measure, StageDecisionMade::class);
 });
@@ -44,7 +44,7 @@ test('sending a stage to rework notifies the measure contact', function () {
         'review_state' => 'submitted',
     ]);
 
-    $this->actingAs($this->proctor)->post(route('approval.rework', $update), ['review_comment' => 'Уточните формулировку']);
+    $this->actingAs($this->administrator)->post(route('approval.rework', $update), ['review_comment' => 'Уточните формулировку']);
 
     Notification::assertSentTo($measure, StageDecisionMade::class);
 });
@@ -62,7 +62,7 @@ test('approving a stage does not fire a decision notification', function () {
     ]);
     Evidence::factory()->create(['measure_id' => $measure->id, 'measure_stage_id' => $stage->id, 'period_id' => $period->id, 'type' => EvidenceType::Link]);
 
-    $this->actingAs($this->proctor)->post(route('approval.approve', $update), ['approved_percent' => 100]);
+    $this->actingAs($this->administrator)->post(route('approval.approve', $update), ['approved_percent' => 100]);
 
     Notification::assertNothingSentTo($measure);
 });

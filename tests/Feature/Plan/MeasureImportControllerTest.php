@@ -5,11 +5,11 @@ use Database\Seeders\RoleSeeder;
 
 beforeEach(fn () => $this->seed(RoleSeeder::class));
 
-test('a coordinator can view the import screen', function () {
-    $coordinator = User::factory()->create();
-    $coordinator->assignRole('coordinator');
+test('an administrator can view the import screen', function () {
+    $administrator = User::factory()->create();
+    $administrator->assignRole('administrator');
 
-    $this->actingAs($coordinator)->get(route('plan.import'))->assertOk();
+    $this->actingAs($administrator)->get(route('plan.import'))->assertOk();
 });
 
 test('an observer cannot view the import screen', function () {
