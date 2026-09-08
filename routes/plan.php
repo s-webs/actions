@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Plan\MeasureImportController;
+use App\Http\Controllers\Plan\MeasureStageController;
 use App\Http\Controllers\Plan\PlanController;
 use Illuminate\Support\Facades\Route;
 
@@ -13,4 +14,8 @@ Route::middleware('auth:web')->group(function () {
 
     Route::get('plan/import', [MeasureImportController::class, 'create'])->name('plan.import');
     Route::post('plan/import', [MeasureImportController::class, 'store'])->name('plan.import.store');
+
+    Route::post('plan/measures/{measure}/stages', [MeasureStageController::class, 'store'])->name('plan.stages.store');
+    Route::patch('plan/stages/{stage}', [MeasureStageController::class, 'update'])->name('plan.stages.update');
+    Route::delete('plan/stages/{stage}', [MeasureStageController::class, 'destroy'])->name('plan.stages.destroy');
 });

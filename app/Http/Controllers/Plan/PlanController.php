@@ -10,6 +10,7 @@ use App\Models\Measure;
 use App\Models\Responsible;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -64,6 +65,7 @@ class PlanController extends Controller
             'directions' => Direction::orderBy('number')->get(['id', 'number', 'name']),
             'responsibles' => Responsible::orderBy('name')->get(['id', 'name']),
             'statuses' => collect(MeasureStatus::cases())->map->value,
+            'canManageStages' => Auth::user()->can('manage', Measure::class),
         ]);
     }
 

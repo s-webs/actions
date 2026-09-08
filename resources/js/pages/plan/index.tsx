@@ -1,8 +1,9 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,7 @@ interface PlanIndexProps {
     directions: { id: number; number: number; name: string }[];
     responsibles: { id: number; name: string }[];
     statuses: MeasureStatus[];
+    canManageStages: boolean;
 }
 
 const STATUS_LABELS: Record<MeasureStatus, string> = {
@@ -76,7 +78,124 @@ const RISK_LABELS: Record<RiskLevel, string> = {
 
 const ALL = '__all__';
 
-export default function PlanIndex({ measures, filters, directions, responsibles, statuses }: PlanIndexProps) {
+function AddStageForm({ measureId }: { measureId: number }) {
+    const { data, setData, post, processing, errors, reset } = useForm({
+        title: '',
+        planned_date: '',
+        weight: '',
+    });
+
+    function submit(e: FormEvent) {
+        e.preventDefault();
+        post(route('plan.stages.store', measureId), {
+            preserveScroll: true,
+            onSuccess: () => reset(),
+        });
+    }
+
+    return (
+        <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3 border-t pt-3">
+            <div className="grid gap-1">
+                <Label htmlFor={`stage-title-${measureId}`}>Название этапа</Label>
+                <Input
+                    id={`stage-title-${measureId}`}
+                    className="w-64"
+                    value={data.title}
+                    onChange={(e) => setData('title', e.target.value)}
+                />
+                {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+            </div>
+            <div className="grid gap-1">
+                <Label htmlFor={`stage-date-${measureId}`}>Плановая дата</Label>
+                <Input
+                    id={`stage-date-${measureId}`}
+                    type="date"
+                    className="w-40"
+                    value={data.planned_date}
+                    onChange={(e) => setData('planned_date', e.target.value)}
+                />
+                {errors.planned_date && <p className="text-xs text-destructive">{errors.planned_date}</p>}
+            </div>
+            <div className="grid gap-1">
+                <Label htmlFor={`stage-weight-${measureId}`}>Вес, %</Label>
+                <Input
+                    id={`stage-weight-${measureId}`}
+                    type="number"
+                    min={1}
+                    max={100}
+                    className="w-24"
+                    value={data.weight}
+                    onChange={(e) => setData('weight', e.target.value)}
+                />
+                {errors.weight && <p className="text-xs text-destructive">{errors.weight}</p>}
+            </div>
+            <Button type="submit" size="sm" disabled={processing}>
+                Добавить этап
+            </Button>
+        </form>
+    );
+}
+
+function StageManager({ measureId, stages, canManage }: { measureId: number; stages: StageRow[]; canManage: boolean }) {
+    if (stages.length === 0 && !canManage) {
+        return <p className="text-muted-foreground text-sm">Этапы ещё не заведены координатором.</p>;
+    }
+
+    return (
+        <div>
+            {stages.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                    Этапы ещё не заведены — без них рабочее место мероприятия не покажет форму отчёта и загрузки файлов.
+                    Добавьте хотя бы один этап ниже.
+                </p>
+            ) : (
+                <table className="w-full text-left text-sm">
+                    <thead>
+                        <tr className="text-muted-foreground">
+                            <th className="pr-4">№</th>
+                            <th className="pr-4">Этап</th>
+                            <th className="pr-4">Плановая дата</th>
+                            <th className="pr-4">Вес</th>
+                            <th className="pr-4">Состояние проверки</th>
+                            {canManage && <th></th>}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {stages.map((s) => (
+                            <tr key={s.id}>
+                                <td className="pr-4">{s.order}</td>
+                                <td className="pr-4">{s.title}</td>
+                                <td className="pr-4">{s.planned_date ?? '—'}</td>
+                                <td className="pr-4">{s.weight}%</td>
+                                <td className="pr-4">{s.review_state ?? 'черновик'}</td>
+                                {canManage && (
+                                    <td>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Удалить этап"
+                                            onClick={() => {
+                                                if (confirm(`Удалить этап «${s.title}»?`)) {
+                                                    router.delete(route('plan.stages.destroy', s.id), { preserveScroll: true });
+                                                }
+                                            }}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </td>
+                                )}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+            {canManage && <AddStageForm measureId={measureId} />}
+        </div>
+    );
+}
+
+export default function PlanIndex({ measures, filters, directions, responsibles, statuses, canManageStages }: PlanIndexProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [search, setSearch] = useState(filters.search ?? '');
 
@@ -264,32 +383,7 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
                                                 <Collapsible open>
                                                     <CollapsibleTrigger className="hidden" />
                                                     <CollapsibleContent>
-                                                        {m.stages.length === 0 ? (
-                                                            <p className="text-muted-foreground text-sm">Этапы ещё не заведены координатором.</p>
-                                                        ) : (
-                                                            <table className="w-full text-left text-sm">
-                                                                <thead>
-                                                                    <tr className="text-muted-foreground">
-                                                                        <th className="pr-4">№</th>
-                                                                        <th className="pr-4">Этап</th>
-                                                                        <th className="pr-4">Плановая дата</th>
-                                                                        <th className="pr-4">Вес</th>
-                                                                        <th>Состояние проверки</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    {m.stages.map((s) => (
-                                                                        <tr key={s.id}>
-                                                                            <td className="pr-4">{s.order}</td>
-                                                                            <td className="pr-4">{s.title}</td>
-                                                                            <td className="pr-4">{s.planned_date ?? '—'}</td>
-                                                                            <td className="pr-4">{s.weight}%</td>
-                                                                            <td>{s.review_state ?? 'черновик'}</td>
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                            </table>
-                                                        )}
+                                                        <StageManager measureId={m.id} stages={m.stages} canManage={canManageStages} />
                                                     </CollapsibleContent>
                                                 </Collapsible>
                                             </td>
