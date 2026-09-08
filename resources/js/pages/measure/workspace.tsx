@@ -49,6 +49,16 @@ interface HistoryEntry {
     approved_at: string | null;
 }
 
+interface ChangeLogEntry {
+    id: number;
+    event: 'created' | 'updated' | 'deleted';
+    model: string;
+    user: string;
+    old_values: Record<string, unknown>;
+    new_values: Record<string, unknown>;
+    created_at: string;
+}
+
 interface WorkspaceProps {
     measure: {
         number: number;
@@ -62,6 +72,59 @@ interface WorkspaceProps {
     measureState: { status: MeasureStatus; risk_text: string | null; needs_decision: boolean; locked: boolean };
     stages: Stage[];
     history: HistoryEntry[];
+    changeLog: ChangeLogEntry[];
+}
+
+const EVENT_LABELS: Record<ChangeLogEntry['event'], string> = {
+    created: 'Создано',
+    updated: 'Изменено',
+    deleted: 'Удалено',
+};
+
+const FIELD_LABELS: Record<string, string> = {
+    title: 'Название',
+    done_text: 'Что сделано',
+    next_step: 'Следующий шаг',
+    next_step_date: 'Срок следующего шага',
+    review_state: 'Состояние проверки',
+    approved_percent: '% готовности',
+    review_comment: 'Комментарий проверки',
+    status: 'Статус',
+    risk_text: 'Риск/проблема',
+    needs_decision: 'Требуется решение',
+    weight: 'Вес',
+    planned_date: 'Плановая дата',
+    proctor_comment: 'Комментарий проректора',
+};
+
+function ChangeLogCard({ entry }: { entry: ChangeLogEntry }) {
+    const fields = Array.from(new Set([...Object.keys(entry.old_values ?? {}), ...Object.keys(entry.new_values ?? {})]));
+
+    return (
+        <div className="rounded-lg border p-3 text-sm">
+            <div className="flex items-center justify-between">
+                <span className="font-medium">
+                    {entry.model} · {EVENT_LABELS[entry.event]}
+                </span>
+                <span className="text-muted-foreground text-xs">{entry.created_at}</span>
+            </div>
+            <p className="text-muted-foreground text-xs">Кто: {entry.user}</p>
+            {fields.length > 0 && (
+                <ul className="mt-2 flex flex-col gap-0.5">
+                    {fields.map((field) => (
+                        <li key={field}>
+                            <span className="text-muted-foreground">{FIELD_LABELS[field] ?? field}:</span>{' '}
+                            {entry.old_values?.[field] !== undefined && (
+                                <span className="text-muted-foreground line-through">{String(entry.old_values[field] ?? '—')}</span>
+                            )}{' '}
+                            {entry.old_values?.[field] !== undefined && '→ '}
+                            {String(entry.new_values?.[field] ?? '—')}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
 }
 
 const STATUS_LABELS: Record<MeasureStatus, string> = {
@@ -80,14 +143,18 @@ const REVIEW_LABELS: Record<ReviewState, string> = {
     rework: 'На доработку',
 };
 
+const ACCEPTED_FILE_EXTENSIONS = '.doc,.docx,.pdf,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg,.tif,.tiff,.heic,.heif';
+
 function EvidenceUploader({ stageId }: { stageId: number }) {
     const [file, setFile] = useState<File | null>(null);
     const [url, setUrl] = useState('');
     const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     function submit(e: FormEvent) {
         e.preventDefault();
         setBusy(true);
+        setError(null);
         const form = new FormData();
         if (file) form.append('file', file);
         if (url) form.append('url', url);
@@ -95,23 +162,33 @@ function EvidenceUploader({ stageId }: { stageId: number }) {
         router.post(route('measure.workspace.evidence', stageId), form, {
             forceFormData: true,
             preserveScroll: true,
-            onFinish: () => {
-                setBusy(false);
+            onError: (errors) => setError(errors.file ?? errors.url ?? 'Не удалось прикрепить документ.'),
+            onSuccess: () => {
                 setFile(null);
                 setUrl('');
             },
+            onFinish: () => setBusy(false),
         });
     }
 
     return (
-        <form onSubmit={submit} className="flex flex-wrap items-center gap-2 text-sm">
-            <Input type="file" className="w-56" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-            <span className="text-muted-foreground">или</span>
-            <Input type="url" placeholder="ссылка на документ" className="w-56" value={url} onChange={(e) => setUrl(e.target.value)} />
-            <Button type="submit" size="sm" variant="secondary" disabled={busy || (!file && !url)}>
-                Прикрепить
-            </Button>
-        </form>
+        <div className="flex flex-col gap-1">
+            <form onSubmit={submit} className="flex flex-wrap items-center gap-2 text-sm">
+                <Input
+                    type="file"
+                    accept={ACCEPTED_FILE_EXTENSIONS}
+                    className="w-56"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+                <span className="text-muted-foreground">или</span>
+                <Input type="url" placeholder="ссылка на документ" className="w-56" value={url} onChange={(e) => setUrl(e.target.value)} />
+                <Button type="submit" size="sm" variant="secondary" disabled={busy || (!file && !url)}>
+                    Прикрепить
+                </Button>
+            </form>
+            <p className="text-muted-foreground text-xs">Word, Excel, PDF или изображение, до 25 МБ.</p>
+            {error && <p className="text-destructive text-xs">{error}</p>}
+        </div>
     );
 }
 
@@ -119,7 +196,7 @@ function EvidenceUploader({ stageId }: { stageId: number }) {
  * Рабочее место мероприятия (guard `measure`) — task-007,
  * [[Функциональные требования#4.7 Рабочее место мероприятия]].
  */
-export default function Workspace({ measure, period, measureState, stages, history }: WorkspaceProps) {
+export default function Workspace({ measure, period, measureState, stages, history, changeLog }: WorkspaceProps) {
     const { data, setData, patch, transform, processing, errors } = useForm({
         measure_status: measureState.status,
         risk_text: measureState.risk_text ?? '',
@@ -325,6 +402,19 @@ export default function Workspace({ measure, period, measureState, stages, histo
                     </ul>
                 </section>
             )}
+
+            <section className="flex flex-col gap-3 rounded-lg border p-4">
+                <h2 className="font-medium">Все изменения</h2>
+                {changeLog.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">Изменений пока нет.</p>
+                ) : (
+                    <div className="flex flex-col gap-2">
+                        {changeLog.map((entry) => (
+                            <ChangeLogCard key={entry.id} entry={entry} />
+                        ))}
+                    </div>
+                )}
+            </section>
         </div>
     );
 }

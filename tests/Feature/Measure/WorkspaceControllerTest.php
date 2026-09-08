@@ -142,3 +142,53 @@ test('a measure session cannot attach evidence to a stage of a different measure
         ->post(route('measure.workspace.evidence', $otherStage), ['url' => 'https://example.test/x.pdf'])
         ->assertForbidden();
 });
+
+test('office and image files are accepted as evidence', function () {
+    Storage::fake('public');
+
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $credential = loginAsMeasure($measure);
+
+    foreach (['order.docx', 'plan.xlsx', 'scan.jpg', 'scan.png'] as $name) {
+        $stage->evidences()->delete();
+
+        $this->actingAs($credential, 'measure')
+            ->post(route('measure.workspace.evidence', $stage), ['file' => UploadedFile::fake()->create($name, 100)])
+            ->assertRedirect()
+            ->assertSessionDoesntHaveErrors();
+    }
+});
+
+test('a disallowed file type is rejected with a validation error', function () {
+    Storage::fake('public');
+
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $credential = loginAsMeasure($measure);
+
+    $this->actingAs($credential, 'measure')
+        ->post(route('measure.workspace.evidence', $stage), [
+            'file' => UploadedFile::fake()->create('script.exe', 10, 'application/x-msdownload'),
+        ])
+        ->assertSessionHasErrors('file');
+
+    expect($stage->evidences()->count())->toBe(0);
+});
+
+test('the change log only shows changes for this measure, not another one', function () {
+    $measure = Measure::factory()->create(['title' => 'Своё мероприятие']);
+    $otherMeasure = Measure::factory()->create(['title' => 'Чужое мероприятие']);
+    $credential = loginAsMeasure($measure);
+
+    $measure->update(['proctor_comment' => 'Заметка по своему']);
+    $otherMeasure->update(['proctor_comment' => 'Заметка по чужому']);
+
+    $this->actingAs($credential, 'measure')
+        ->get(route('measure.workspace'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('changeLog', function ($entries) {
+                return collect($entries)->contains(fn ($e) => $e['model'] === 'Мероприятие')
+                    && ! collect($entries)->contains(fn ($e) => ($e['new_values']['proctor_comment'] ?? null) === 'Заметка по чужому');
+            }));
+});

@@ -13,13 +13,16 @@ use App\Models\MeasurePeriodState;
 use App\Models\MeasureStage;
 use App\Models\Period;
 use App\Models\StagePeriodUpdate;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use OwenIt\Auditing\Models\Audit;
 
 /**
  * Рабочее место мероприятия (guard `measure`) —
@@ -101,7 +104,46 @@ class WorkspaceController extends Controller
                 'review_comment' => $u->review_comment,
                 'approved_at' => $u->approved_at?->format('Y-m-d H:i'),
             ]),
+            'changeLog' => $this->changeLog($measure),
         ]);
+    }
+
+    /**
+     * Все изменения по мероприятию, его этапам и отчётам по этапам — карточки
+     * «что менялось, кто, когда» на экране рабочего места (в дополнение к ленте решений
+     * проректора выше). Источник — тот же аудит, что и общий `/audit`
+     * ([[Функциональные требования#4.11 Аудит и история изменений]]), но отфильтрован
+     * только на это мероприятие.
+     */
+    private function changeLog(Measure $measure): Collection
+    {
+        $stageIds = $measure->stages->pluck('id');
+        $updateIds = StagePeriodUpdate::whereIn('measure_stage_id', $stageIds)->pluck('id');
+
+        $modelLabels = [
+            Measure::class => 'Мероприятие',
+            MeasureStage::class => 'Этап',
+            StagePeriodUpdate::class => 'Отчёт по этапу',
+        ];
+
+        return Audit::query()
+            ->where(fn ($q) => $q
+                ->where(fn ($q2) => $q2->where('auditable_type', Measure::class)->where('auditable_id', $measure->id))
+                ->orWhere(fn ($q2) => $q2->where('auditable_type', MeasureStage::class)->whereIn('auditable_id', $stageIds))
+                ->orWhere(fn ($q2) => $q2->where('auditable_type', StagePeriodUpdate::class)->whereIn('auditable_id', $updateIds)))
+            ->with('user')
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get()
+            ->map(fn (Audit $audit) => [
+                'id' => $audit->id,
+                'event' => $audit->event,
+                'model' => $modelLabels[$audit->auditable_type] ?? $audit->auditable_type,
+                'user' => $audit->user instanceof User ? $audit->user->name : ($audit->user ? 'мероприятие (тот же вход)' : 'система'),
+                'old_values' => $audit->old_values,
+                'new_values' => $audit->new_values,
+                'created_at' => $audit->created_at->format('Y-m-d H:i'),
+            ]);
     }
 
     public function update(Request $request): RedirectResponse
@@ -182,7 +224,10 @@ class WorkspaceController extends Controller
 
         $data = $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
-            'file' => ['required_without:url', 'nullable', 'file', 'max:20480'],
+            'file' => [
+                'required_without:url', 'nullable', 'file', 'max:25600',
+                'mimes:doc,docx,pdf,xls,xlsx,jpg,jpeg,png,gif,bmp,webp,svg,tif,tiff,heic,heif',
+            ],
             'url' => ['required_without:file', 'nullable', 'url'],
         ]);
 
