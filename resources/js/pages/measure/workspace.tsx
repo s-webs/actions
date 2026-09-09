@@ -426,7 +426,21 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                         ) : (
                             <>
                                 <section className="flex flex-col gap-4 rounded-lg border p-4">
-                                    <h2 className="font-medium">Статус мероприятия</h2>
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="font-medium">
+                                            Этап {currentStage.order}. {currentStage.title}
+                                        </h2>
+                                        <Badge variant="outline">{REVIEW_LABELS[reviewState]}</Badge>
+                                    </div>
+                                    <p className="text-muted-foreground text-sm">
+                                        Плановая дата: {currentStage.planned_date ?? '—'} · Вес: {currentStage.weight}%
+                                    </p>
+
+                                    {currentStage.update?.review_comment && (
+                                        <p className="rounded-md bg-muted p-2 text-sm">
+                                            Комментарий администратора: {currentStage.update.review_comment}
+                                        </p>
+                                    )}
 
                                     <div className="grid gap-2">
                                         <Label>Статус</Label>
@@ -449,6 +463,15 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                     </div>
 
                                     <div className="grid gap-2">
+                                        <Label>Что сделано за период</Label>
+                                        <Textarea
+                                            value={data.done_text}
+                                            onChange={(e) => setData('done_text', e.target.value)}
+                                            disabled={locked}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2">
                                         <Label htmlFor="risk_text">Риск / проблема</Label>
                                         <Textarea
                                             id="risk_text"
@@ -466,33 +489,6 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                         />
                                         Требуется решение руководства
                                     </label>
-                                </section>
-
-                                <section className="flex flex-col gap-4 rounded-lg border p-4">
-                                    <div className="flex items-center justify-between">
-                                        <h2 className="font-medium">
-                                            Этап {currentStage.order}. {currentStage.title}
-                                        </h2>
-                                        <Badge variant="outline">{REVIEW_LABELS[reviewState]}</Badge>
-                                    </div>
-                                    <p className="text-muted-foreground text-sm">
-                                        Плановая дата: {currentStage.planned_date ?? '—'} · Вес: {currentStage.weight}%
-                                    </p>
-
-                                    {currentStage.update?.review_comment && (
-                                        <p className="rounded-md bg-muted p-2 text-sm">
-                                            Комментарий администратора: {currentStage.update.review_comment}
-                                        </p>
-                                    )}
-
-                                    <div className="grid gap-2">
-                                        <Label>Что сделано за период</Label>
-                                        <Textarea
-                                            value={data.done_text}
-                                            onChange={(e) => setData('done_text', e.target.value)}
-                                            disabled={locked}
-                                        />
-                                    </div>
 
                                     <div className="flex flex-col gap-2">
                                         <Label>Подтверждающие документы</Label>
@@ -533,8 +529,7 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                                 </div>
                                                 <p className="text-muted-foreground text-xs">
                                                     Word, Excel, PDF или изображение, до 25 МБ каждый — можно выбрать сразу несколько
-                                                    файлов. Уйдут вместе с «Сохранить черновик» / «Отправить на проверку», отдельно
-                                                    нажимать ничего не нужно.
+                                                    файлов.
                                                 </p>
                                                 {(errors.files || errors.evidence_url) && (
                                                     <p className="text-destructive text-xs">{errors.files ?? errors.evidence_url}</p>
@@ -545,10 +540,8 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                             </div>
                                         )}
                                     </div>
-                                </section>
 
-                                <section className="flex flex-col gap-4 rounded-lg border p-4">
-                                    <div className="grid gap-2">
+                                    <div className="grid gap-2 border-t pt-4">
                                         <Label htmlFor="submitted_by_name">ФИО и должность (обязательно при отправке на проверку)</Label>
                                         <Input
                                             id="submitted_by_name"
