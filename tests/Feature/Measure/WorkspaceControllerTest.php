@@ -291,13 +291,37 @@ test('a measure session can attach an uploaded file as evidence', function () {
 
     $this->actingAs($credential, 'measure')
         ->post(route('measure.workspace.evidence', $stage), [
-            'file' => UploadedFile::fake()->create('order.pdf', 100),
+            'files' => [UploadedFile::fake()->create('order.pdf', 100)],
         ])
         ->assertRedirect();
 
     $evidence = $stage->evidences()->first();
     expect($evidence->type->value)->toBe('file');
     Storage::disk('public')->assertExists($evidence->path_or_url);
+});
+
+test('a measure session can attach several files at once', function () {
+    Storage::fake('public');
+
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $credential = loginAsMeasure($measure);
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
+
+    $this->actingAs($credential, 'measure')
+        ->post(route('measure.workspace.evidence', $stage), [
+            'files' => [
+                UploadedFile::fake()->create('order.pdf', 100),
+                UploadedFile::fake()->create('scan.jpg', 100),
+                UploadedFile::fake()->create('report.docx', 100),
+            ],
+        ])
+        ->assertRedirect()
+        ->assertSessionDoesntHaveErrors();
+
+    expect($stage->evidences()->count())->toBe(3);
+    $stage->evidences->each(fn ($e) => Storage::disk('public')->assertExists($e->path_or_url));
 });
 
 test('a measure session cannot attach evidence to a stage of a different measure', function () {
@@ -324,7 +348,7 @@ test('office and image files are accepted as evidence', function () {
         $stage->evidences()->delete();
 
         $this->actingAs($credential, 'measure')
-            ->post(route('measure.workspace.evidence', $stage), ['file' => UploadedFile::fake()->create($name, 100)])
+            ->post(route('measure.workspace.evidence', $stage), ['files' => [UploadedFile::fake()->create($name, 100)]])
             ->assertRedirect()
             ->assertSessionDoesntHaveErrors();
     }
@@ -341,9 +365,9 @@ test('a disallowed file type is rejected with a validation error', function () {
 
     $this->actingAs($credential, 'measure')
         ->post(route('measure.workspace.evidence', $stage), [
-            'file' => UploadedFile::fake()->create('script.exe', 10, 'application/x-msdownload'),
+            'files' => [UploadedFile::fake()->create('script.exe', 10, 'application/x-msdownload')],
         ])
-        ->assertSessionHasErrors('file');
+        ->assertSessionHasErrors('files.0');
 
     expect($stage->evidences()->count())->toBe(0);
 });

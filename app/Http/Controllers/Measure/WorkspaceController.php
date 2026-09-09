@@ -266,29 +266,35 @@ class WorkspaceController extends Controller
 
         $data = $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
-            'file' => [
-                'required_without:url', 'nullable', 'file', 'max:25600',
+            'files' => ['required_without:url', 'nullable', 'array', 'max:20'],
+            'files.*' => [
+                'file', 'max:25600',
                 'mimes:doc,docx,pdf,xls,xlsx,jpg,jpeg,png,gif,bmp,webp,svg,tif,tiff,heic,heif',
             ],
-            'url' => ['required_without:file', 'nullable', 'url'],
+            'url' => ['required_without:files', 'nullable', 'url'],
         ]);
 
-        if ($request->hasFile('file')) {
-            $path = $request->file('file')->store('evidence/'.$measure->id, 'public');
-            $type = EvidenceType::File;
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $file) {
+                $stage->evidences()->create([
+                    'measure_id' => $measure->id,
+                    'period_id' => $period->id,
+                    'type' => EvidenceType::File,
+                    'path_or_url' => $file->store('evidence/'.$measure->id, 'public'),
+                    'title' => $data['title'] ?? null,
+                    'uploaded_via' => SubmittedVia::MeasureSession,
+                ]);
+            }
         } else {
-            $path = $data['url'];
-            $type = EvidenceType::Link;
+            $stage->evidences()->create([
+                'measure_id' => $measure->id,
+                'period_id' => $period->id,
+                'type' => EvidenceType::Link,
+                'path_or_url' => $data['url'],
+                'title' => $data['title'] ?? null,
+                'uploaded_via' => SubmittedVia::MeasureSession,
+            ]);
         }
-
-        $stage->evidences()->create([
-            'measure_id' => $measure->id,
-            'period_id' => $period->id,
-            'type' => $type,
-            'path_or_url' => $path,
-            'title' => $data['title'] ?? null,
-            'uploaded_via' => SubmittedVia::MeasureSession,
-        ]);
 
         return back()->with('status', 'Документ добавлен.');
     }

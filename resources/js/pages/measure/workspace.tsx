@@ -353,7 +353,7 @@ function StageSidebar({ stages }: { stages: StageListItem[] }) {
 }
 
 function EvidenceUploader({ stageId }: { stageId: number }) {
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<File[]>([]);
     const [url, setUrl] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -363,15 +363,15 @@ function EvidenceUploader({ stageId }: { stageId: number }) {
         setBusy(true);
         setError(null);
         const form = new FormData();
-        if (file) form.append('file', file);
+        files.forEach((file) => form.append('files[]', file));
         if (url) form.append('url', url);
 
         router.post(route('measure.workspace.evidence', stageId), form, {
             forceFormData: true,
             preserveScroll: true,
-            onError: (errors) => setError(errors.file ?? errors.url ?? 'Не удалось прикрепить документ.'),
+            onError: (errors) => setError(errors.files ?? errors.url ?? 'Не удалось прикрепить документ(ы).'),
             onSuccess: () => {
-                setFile(null);
+                setFiles([]);
                 setUrl('');
             },
             onFinish: () => setBusy(false),
@@ -383,17 +383,20 @@ function EvidenceUploader({ stageId }: { stageId: number }) {
             <form onSubmit={submit} className="flex flex-wrap items-center gap-2 text-sm">
                 <Input
                     type="file"
+                    multiple
                     accept={ACCEPTED_FILE_EXTENSIONS}
                     className="w-56"
-                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
                 />
                 <span className="text-muted-foreground">или</span>
                 <Input type="url" placeholder="ссылка на документ" className="w-56" value={url} onChange={(e) => setUrl(e.target.value)} />
-                <Button type="submit" size="sm" variant="secondary" disabled={busy || (!file && !url)}>
-                    Прикрепить
+                <Button type="submit" size="sm" variant="secondary" disabled={busy || (files.length === 0 && !url)}>
+                    Прикрепить{files.length > 1 ? ` (${files.length})` : ''}
                 </Button>
             </form>
-            <p className="text-muted-foreground text-xs">Word, Excel, PDF или изображение, до 25 МБ.</p>
+            <p className="text-muted-foreground text-xs">
+                Word, Excel, PDF или изображение, до 25 МБ каждый — можно выбрать сразу несколько файлов.
+            </p>
             {error && <p className="text-destructive text-xs">{error}</p>}
         </div>
     );
