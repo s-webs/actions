@@ -26,14 +26,21 @@ class MeasureCredential extends Model implements AuditableContract, Authenticata
         'measure_id',
         'login',
         'password_hash',
+        'password',
+        'login_token',
         'rotated_at',
         'rotated_by',
         'expires_at',
     ];
 
-    /** Хеш пароля в аудит не пишем даже как "изменившееся значение" — [[Функциональные требования#4.11]]. */
+    /**
+     * Хеш и обратимо зашифрованный пароль, а также токен прямой ссылки, в аудит не
+     * пишем даже как "изменившееся значение" — [[Функциональные требования#4.11]].
+     */
     protected $auditExclude = [
         'password_hash',
+        'password',
+        'login_token',
     ];
 
     protected $hidden = [
@@ -43,6 +50,7 @@ class MeasureCredential extends Model implements AuditableContract, Authenticata
     protected function casts(): array
     {
         return [
+            'password' => 'encrypted',
             'rotated_at' => 'datetime',
             'expires_at' => 'datetime',
         ];

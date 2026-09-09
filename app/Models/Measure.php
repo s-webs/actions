@@ -38,6 +38,7 @@ class Measure extends Model implements AuditableContract
         'percent',
         'proctor_comment',
         'contact_email',
+        'stages_confirmed_at',
     ];
 
     protected function casts(): array
@@ -47,6 +48,7 @@ class Measure extends Model implements AuditableContract
             'control_date' => 'date',
             'risk_level' => RiskLevel::class,
             'percent' => 'integer',
+            'stages_confirmed_at' => 'datetime',
         ];
     }
 
@@ -68,6 +70,27 @@ class Measure extends Model implements AuditableContract
     public function stages(): HasMany
     {
         return $this->hasMany(MeasureStage::class)->orderBy('order');
+    }
+
+    public function stagesConfirmed(): bool
+    {
+        return $this->stages_confirmed_at !== null;
+    }
+
+    /**
+     * Последовательное заполнение (task-020,
+     * [[Заполнение и утверждение#Последовательное заполнение этапов]]) — первый по
+     * порядку этап, у которого ещё нет ни одного *утверждённого* отчёта. `null`,
+     * если этапов нет вообще или все уже утверждены (мероприятие пройдено целиком).
+     * Не персистится — вычисляется при каждом обращении, чтобы утверждение
+     * администратором любого этапа автоматически «открывало» следующий без отдельного
+     * шага синхронизации.
+     */
+    public function currentStage(): ?MeasureStage
+    {
+        return $this->stages->first(
+            fn (MeasureStage $stage) => ! $stage->periodUpdates()->where('review_state', ReviewState::Approved)->exists()
+        );
     }
 
     public function periodStates(): HasMany

@@ -13,7 +13,9 @@ use Inertia\Response;
 
 /**
  * Учётные данные мероприятий — доступен проректору и координатору,
- * [[Функциональные требования#4.14 Модуль «Учётные данные мероприятий»]].
+ * [[Функциональные требования#4.14 Модуль «Учётные данные мероприятий»]]. Логин, пароль
+ * (в читаемом виде — [[Роли и права#Реализация]]) и прямая ссылка входа видны в таблице
+ * постоянно, не только сразу после генерации/ротации (решение заказчика).
  */
 class CredentialController extends Controller
 {
@@ -29,6 +31,10 @@ class CredentialController extends Controller
                 'number' => $m->number,
                 'title' => $m->title,
                 'login' => $m->credential?->login,
+                'password' => $m->credential?->password,
+                'login_url' => $m->credential?->login_token
+                    ? route('measure.link-login', $m->credential->login_token)
+                    : null,
                 'rotated_at' => $m->credential?->rotated_at?->format('Y-m-d H:i'),
                 'expires_at' => $m->credential?->expires_at?->format('Y-m-d'),
                 'active_sessions' => $m->sessions->count(),
@@ -40,8 +46,6 @@ class CredentialController extends Controller
                     'last_seen_at' => $s->last_seen_at?->format('Y-m-d H:i'),
                 ]),
             ]),
-            'justRotated' => $request->session()->get('just_rotated'),
-            'justRotatedBulk' => $request->session()->get('just_rotated_bulk'),
         ]);
     }
 
@@ -49,13 +53,9 @@ class CredentialController extends Controller
     {
         Gate::authorize('manage', Measure::class);
 
-        $generated = app(MeasureCredentialGenerator::class)->generate($measure, $request->user());
+        app(MeasureCredentialGenerator::class)->generate($measure, $request->user());
 
-        return back()->with('just_rotated', [
-            'measure_number' => $measure->number,
-            'login' => $generated['login'],
-            'password' => $generated['password'],
-        ]);
+        return back()->with('status', "Учётные данные №{$measure->number} перегенерированы — старая ссылка входа тоже отозвана.");
     }
 
     public function rotateAll(Request $request): RedirectResponse
@@ -64,13 +64,11 @@ class CredentialController extends Controller
 
         $generator = app(MeasureCredentialGenerator::class);
 
-        $all = Measure::orderBy('number')->get()->map(function (Measure $measure) use ($generator, $request) {
-            $generated = $generator->generate($measure, $request->user());
+        $count = Measure::orderBy('number')->get()
+            ->each(fn (Measure $measure) => $generator->generate($measure, $request->user()))
+            ->count();
 
-            return ['measure_number' => $measure->number, 'login' => $generated['login'], 'password' => $generated['password']];
-        });
-
-        return back()->with('just_rotated_bulk', $all);
+        return back()->with('status', "Перегенерировано {$count} комплектов учётных данных.");
     }
 
     public function terminateSessions(Request $request, Measure $measure): RedirectResponse

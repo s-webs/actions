@@ -57,3 +57,32 @@ test('an admin session cannot reach the measure workspace', function () {
 
     $response->assertRedirect(route('measure.login'));
 });
+
+test('the login link authenticates directly without a login/password form', function () {
+    $measure = Measure::factory()->create();
+    $credential = MeasureCredential::factory()->create(['measure_id' => $measure->id, 'login_token' => 'a-valid-token']);
+
+    $response = $this->get(route('measure.link-login', 'a-valid-token'));
+
+    $response->assertRedirect(route('measure.workspace'));
+    $this->assertAuthenticatedAs($credential, 'measure');
+    expect(MeasureSession::where('measure_id', $measure->id)->exists())->toBeTrue();
+});
+
+test('an unknown login-link token is rejected', function () {
+    $this->get(route('measure.link-login', 'not-a-real-token'))->assertNotFound();
+    $this->assertGuest('measure');
+});
+
+test('visiting a login link while signed in as another measure switches to the linked one', function () {
+    $firstMeasure = Measure::factory()->create();
+    $firstCredential = MeasureCredential::factory()->create(['measure_id' => $firstMeasure->id]);
+    $secondMeasure = Measure::factory()->create();
+    $secondCredential = MeasureCredential::factory()->create(['measure_id' => $secondMeasure->id, 'login_token' => 'switch-token']);
+
+    $this->actingAs($firstCredential, 'measure')
+        ->get(route('measure.link-login', 'switch-token'))
+        ->assertRedirect(route('measure.workspace'));
+
+    $this->assertAuthenticatedAs($secondCredential, 'measure');
+});

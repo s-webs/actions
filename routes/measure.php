@@ -17,6 +17,15 @@ Route::middleware('guest:measure')->group(function () {
         ->name('measure.login.store');
 });
 
+/**
+ * Прямая ссылка входа — вне guest:measure намеренно: если в браузере уже открыта
+ * сессия другого мероприятия, ссылка должна перелогинить на своё, а не быть
+ * заблокирована guest-мидлваром.
+ */
+Route::get('measure/link-login/{token}', [MeasureAuthenticatedSessionController::class, 'loginViaLink'])
+    ->middleware('throttle:30,1')
+    ->name('measure.link-login');
+
 Route::middleware('auth:measure')->group(function () {
     Route::get('measure/workspace', [WorkspaceController::class, 'show'])->name('measure.workspace');
     Route::patch('measure/workspace', [WorkspaceController::class, 'update'])->name('measure.workspace.update');
@@ -26,6 +35,7 @@ Route::middleware('auth:measure')->group(function () {
     Route::post('measure/stages', [WorkspaceController::class, 'storeStage'])->name('measure.stages.store');
     Route::patch('measure/stages/{stage}', [WorkspaceController::class, 'updateStage'])->name('measure.stages.update');
     Route::delete('measure/stages/{stage}', [WorkspaceController::class, 'destroyStage'])->name('measure.stages.destroy');
+    Route::post('measure/stages/confirm', [WorkspaceController::class, 'confirmStages'])->name('measure.stages.confirm');
 
     Route::post('measure/logout', [MeasureAuthenticatedSessionController::class, 'destroy'])
         ->name('measure.logout');

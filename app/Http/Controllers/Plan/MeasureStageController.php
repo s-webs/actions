@@ -19,12 +19,17 @@ use Illuminate\Validation\ValidationException;
  * ({@see WorkspaceController::storeStage()}), этот
  * контроллер даёт администратору ту же возможность без входа под учётными данными
  * мероприятия — например, чтобы поправить веса нескольких мероприятий подряд.
+ *
+ * task-020: после фиксации списка этапов (`measures.stages_confirmed_at`) даже
+ * `administrator` эту возможность теряет — структуру может поменять только
+ * `developer` ([[Заполнение и утверждение#Последовательное заполнение этапов]]).
  */
 class MeasureStageController extends Controller
 {
     public function store(Request $request, Measure $measure): RedirectResponse
     {
         Gate::authorize('manage', Measure::class);
+        $this->ensureStructureEditable($request, $measure);
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -42,6 +47,7 @@ class MeasureStageController extends Controller
     public function update(Request $request, MeasureStage $stage): RedirectResponse
     {
         Gate::authorize('manage', Measure::class);
+        $this->ensureStructureEditable($request, $stage->measure);
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -54,9 +60,10 @@ class MeasureStageController extends Controller
         return back()->with('status', 'Этап обновлён.');
     }
 
-    public function destroy(MeasureStage $stage): RedirectResponse
+    public function destroy(Request $request, MeasureStage $stage): RedirectResponse
     {
         Gate::authorize('manage', Measure::class);
+        $this->ensureStructureEditable($request, $stage->measure);
 
         $hasApprovedHistory = $stage->periodUpdates()->where('review_state', ReviewState::Approved)->exists();
 
@@ -69,5 +76,12 @@ class MeasureStageController extends Controller
         $stage->delete();
 
         return back()->with('status', 'Этап удалён.');
+    }
+
+    private function ensureStructureEditable(Request $request, Measure $measure): void
+    {
+        if ($measure->stagesConfirmed() && ! $request->user()->hasRole('developer')) {
+            abort(403, 'Список этапов зафиксирован — структуру может менять только разработчик.');
+        }
     }
 }

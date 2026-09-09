@@ -14,6 +14,8 @@ beforeEach(function () {
     $this->administrator->assignRole('administrator');
     $this->observer = User::factory()->create();
     $this->observer->assignRole('observer');
+    $this->developer = User::factory()->create();
+    $this->developer->assignRole('developer');
 });
 
 test('an administrator can add a stage to a measure', function () {
@@ -87,6 +89,30 @@ test('an administrator can delete a stage with no approved history', function ()
         ->assertRedirect();
 
     expect(MeasureStage::find($stage->id))->toBeNull();
+});
+
+test('once the stage list is confirmed even an administrator cannot manage stages, only a developer', function () {
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $measure->update(['stages_confirmed_at' => now()]);
+
+    $this->actingAs($this->administrator)
+        ->post(route('plan.stages.store', $measure), ['title' => 'X', 'weight' => 10])
+        ->assertForbidden();
+
+    $this->actingAs($this->administrator)
+        ->patch(route('plan.stages.update', $stage), ['title' => 'X', 'weight' => 10])
+        ->assertForbidden();
+
+    $this->actingAs($this->administrator)
+        ->delete(route('plan.stages.destroy', $stage))
+        ->assertForbidden();
+
+    $this->actingAs($this->developer)
+        ->patch(route('plan.stages.update', $stage), ['title' => 'Поправлено разработчиком', 'weight' => 15])
+        ->assertRedirect();
+
+    expect($stage->fresh()->title)->toBe('Поправлено разработчиком');
 });
 
 test('deleting a stage with approved history is blocked', function () {

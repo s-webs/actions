@@ -1,4 +1,5 @@
 import { Head, router } from '@inertiajs/react';
+import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -19,29 +20,26 @@ interface CredentialRow {
     number: number;
     title: string;
     login: string | null;
+    password: string | null;
+    login_url: string | null;
     rotated_at: string | null;
     expires_at: string | null;
     active_sessions: number;
     sessions: SessionRow[];
 }
 
-interface JustRotated {
-    measure_number: number;
-    login: string;
-    password: string;
-}
-
 interface CredentialsProps {
     rows: CredentialRow[];
-    justRotated: JustRotated | null;
-    justRotatedBulk: JustRotated[] | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Учётные данные мероприятий', href: '/credentials' }];
 
-function downloadCsv(rows: JustRotated[]) {
-    const header = 'Мероприятие;Логин;Пароль\n';
-    const body = rows.map((r) => `${r.measure_number};${r.login};${r.password}`).join('\n');
+function downloadCsv(rows: CredentialRow[]) {
+    const header = 'Мероприятие;Логин;Пароль;Ссылка для входа\n';
+    const body = rows
+        .filter((r) => r.login)
+        .map((r) => `${r.number};${r.login};${r.password ?? ''};${r.login_url ?? ''}`)
+        .join('\n');
     const blob = new Blob(['﻿' + header + body], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -51,13 +49,34 @@ function downloadCsv(rows: JustRotated[]) {
     URL.revokeObjectURL(url);
 }
 
+function CopyButton({ value, label }: { value: string; label: string }) {
+    const [copied, setCopied] = useState(false);
+
+    async function copy() {
+        try {
+            await navigator.clipboard.writeText(value);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+            // Clipboard API недоступен (напр. небезопасный контекст) — молча игнорируем.
+        }
+    }
+
+    return (
+        <Button type="button" size="icon" variant="ghost" className="h-6 w-6" onClick={copy} title={`Копировать: ${label}`}>
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        </Button>
+    );
+}
+
 /**
  * Учётные данные мероприятий — task-015,
- * [[Функциональные требования#4.14 Модуль «Учётные данные мероприятий»]]. «Показать
- * пароль» существует только как часть перегенерации — пароль хранится хешем, повторно
- * посмотреть уже установленный пароль невозможно ни на бэкенде, ни здесь.
+ * [[Функциональные требования#4.14 Модуль «Учётные данные мероприятий»]]. Логин, пароль
+ * и прямая ссылка входа читаемы постоянно (решение заказчика 2026-09-09) — пароль
+ * хранится на бэкенде обратимо зашифрованным, а не хешем, специально ради этого
+ * экрана, см. [[Роли и права#Реализация]].
  */
-export default function CredentialsIndex({ rows, justRotated, justRotatedBulk }: CredentialsProps) {
+export default function CredentialsIndex({ rows }: CredentialsProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
 
     return (
@@ -67,30 +86,21 @@ export default function CredentialsIndex({ rows, justRotated, justRotatedBulk }:
             <div className="flex flex-col gap-4 p-6">
                 <div className="flex items-center justify-between">
                     <h1 className="text-xl font-medium">Учётные данные мероприятий</h1>
-                    <Button
-                        variant="destructive"
-                        onClick={() => confirm('Перегенерировать пароли всех 51 мероприятий? Старые сессии закроются.') && router.post(route('credentials.rotate-all'))}
-                    >
-                        Перегенерировать все
-                    </Button>
-                </div>
-
-                {justRotated && (
-                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-                        Новый пароль для №{justRotated.measure_number} ({justRotated.login}): <strong className="font-mono">{justRotated.password}</strong>
-                        <br />
-                        Показывается один раз — сохраните сейчас.
-                    </div>
-                )}
-
-                {justRotatedBulk && justRotatedBulk.length > 0 && (
-                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-                        <p>Сгенерировано {justRotatedBulk.length} новых паролей — показываются один раз.</p>
-                        <Button size="sm" variant="secondary" className="mt-2" onClick={() => downloadCsv(justRotatedBulk)}>
+                    <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => downloadCsv(rows)}>
                             Скачать CSV
                         </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() =>
+                                confirm('Перегенерировать пароли и ссылки всех 51 мероприятий? Старые сессии закроются, старые ссылки перестанут работать.') &&
+                                router.post(route('credentials.rotate-all'))
+                            }
+                        >
+                            Перегенерировать все
+                        </Button>
                     </div>
-                )}
+                </div>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-left text-sm">
@@ -99,6 +109,8 @@ export default function CredentialsIndex({ rows, justRotated, justRotatedBulk }:
                                 <th className="w-8 p-3"></th>
                                 <th className="p-3">Мероприятие</th>
                                 <th className="p-3">Логин</th>
+                                <th className="p-3">Пароль</th>
+                                <th className="p-3">Ссылка для входа</th>
                                 <th className="p-3">Ротация</th>
                                 <th className="p-3">Срок действия</th>
                                 <th className="p-3">Активные сессии</th>
@@ -117,7 +129,33 @@ export default function CredentialsIndex({ rows, justRotated, justRotatedBulk }:
                                         <td className="p-3">
                                             №{row.number}. {row.title}
                                         </td>
-                                        <td className="p-3 font-mono">{row.login ?? '—'}</td>
+                                        <td className="p-3">
+                                            {row.login ? (
+                                                <span className="flex items-center gap-1 font-mono">
+                                                    {row.login}
+                                                    <CopyButton value={row.login} label="логин" />
+                                                </span>
+                                            ) : (
+                                                '—'
+                                            )}
+                                        </td>
+                                        <td className="p-3">
+                                            {row.password ? (
+                                                <span className="flex items-center gap-1 font-mono">
+                                                    {row.password}
+                                                    <CopyButton value={row.password} label="пароль" />
+                                                </span>
+                                            ) : (
+                                                '—'
+                                            )}
+                                        </td>
+                                        <td className="p-3">
+                                            {row.login_url ? (
+                                                <CopyButton value={row.login_url} label="ссылка для входа" />
+                                            ) : (
+                                                '—'
+                                            )}
+                                        </td>
                                         <td className="p-3">{row.rotated_at ?? '—'}</td>
                                         <td className="p-3">
                                             <Input
@@ -132,7 +170,10 @@ export default function CredentialsIndex({ rows, justRotated, justRotatedBulk }:
                                             <Button
                                                 size="sm"
                                                 variant="secondary"
-                                                onClick={() => confirm('Перегенерировать пароль? Старые сессии закроются.') && router.post(route('credentials.rotate', row.id))}
+                                                onClick={() =>
+                                                    confirm('Перегенерировать пароль и ссылку входа? Старые сессии закроются, старая ссылка перестанет работать.') &&
+                                                    router.post(route('credentials.rotate', row.id))
+                                                }
                                             >
                                                 Перегенерировать
                                             </Button>
@@ -148,7 +189,7 @@ export default function CredentialsIndex({ rows, justRotated, justRotatedBulk }:
                                     </tr>
                                     {expanded === row.id && (
                                         <tr>
-                                            <td colSpan={7} className="bg-muted/20 p-4">
+                                            <td colSpan={9} className="bg-muted/20 p-4">
                                                 {row.sessions.length === 0 ? (
                                                     <p className="text-muted-foreground text-sm">Входов ещё не было.</p>
                                                 ) : (

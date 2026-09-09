@@ -6,6 +6,7 @@ use App\Enums\EvidenceType;
 use App\Enums\MeasureStatus;
 use App\Enums\ReviewState;
 use App\Enums\SubmittedVia;
+use App\Http\Controllers\Approval\ApprovalController;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Plan\MeasureStageController;
 use App\Models\Measure;
@@ -31,6 +32,14 @@ use OwenIt\Auditing\Models\Audit;
  * закрыта самим guard'ом (task-003): один комплект учётных данных = один `measure_id`,
  * поэтому здесь нет отдельной Policy — только проверка, что этап/state, который правят,
  * ещё редактируемы (`draft`/`rework`), и что подача идёт с обязательным ФИО.
+ *
+ * task-020 — последовательное заполнение
+ * ([[Заполнение и утверждение#Последовательное заполнение этапов]]): два режима,
+ * переключаются один раз через {@see confirmStages()}. До фиксации — свободное
+ * управление списком этапов ({@see storeStage()}/{@see updateStage()}/
+ * {@see destroyStage()}). После — виден и редактируется только
+ * {@see Measure::currentStage()}, следующий открывается исключительно
+ * утверждением текущего администратором ({@see ApprovalController::approve()}).
  */
 class WorkspaceController extends Controller
 {
@@ -41,12 +50,7 @@ class WorkspaceController extends Controller
 
         $this->ensureDraftRows($measure, $period);
 
-        $measure->load([
-            'direction',
-            'stages' => fn ($q) => $q->orderBy('order'),
-            'stages.periodUpdates' => fn ($q) => $q->where('period_id', $period->id),
-            'stages.evidences' => fn ($q) => $q->where('period_id', $period->id),
-        ]);
+        $measure->load(['direction', 'stages' => fn ($q) => $q->orderBy('order')]);
 
         $measureState = MeasurePeriodState::where('measure_id', $measure->id)
             ->where('period_id', $period->id)
@@ -58,6 +62,9 @@ class WorkspaceController extends Controller
             ->with('stage:id,title')
             ->orderByDesc('approved_at')
             ->get();
+
+        $confirmed = $measure->stagesConfirmed();
+        $currentStage = $confirmed ? $measure->currentStage() : null;
 
         return Inertia::render('measure/workspace', [
             'measure' => [
@@ -75,28 +82,16 @@ class WorkspaceController extends Controller
                 'needs_decision' => $measureState->needs_decision,
                 'locked' => $this->isMeasureStateLocked($measure, $period),
             ],
-            'stages' => $measure->stages->map(fn (MeasureStage $stage) => [
+            'stagesConfirmed' => $confirmed,
+            'stageList' => $measure->stages->map(fn (MeasureStage $stage) => [
                 'id' => $stage->id,
                 'order' => $stage->order,
                 'title' => $stage->title,
                 'planned_date' => $stage->planned_date?->format('Y-m-d'),
                 'weight' => $stage->weight,
-                'update' => optional($stage->periodUpdates->first(), fn (StagePeriodUpdate $u) => [
-                    'id' => $u->id,
-                    'done_text' => $u->done_text,
-                    'next_step' => $u->next_step,
-                    'next_step_date' => $u->next_step_date?->format('Y-m-d'),
-                    'review_state' => $u->review_state->value,
-                    'review_comment' => $u->review_comment,
-                    'approved_percent' => $u->approved_percent,
-                ]),
-                'evidences' => $stage->evidences->map(fn ($e) => [
-                    'id' => $e->id,
-                    'title' => $e->title,
-                    'type' => $e->type->value,
-                    'path_or_url' => $e->type === EvidenceType::Link ? $e->path_or_url : Storage::disk('public')->url($e->path_or_url),
-                ]),
+                'status' => $this->stageStatus($stage, $currentStage, $confirmed),
             ]),
+            'currentStage' => $currentStage ? $this->currentStagePayload($currentStage, $period) : null,
             'history' => $history->map(fn (StagePeriodUpdate $u) => [
                 'id' => $u->id,
                 'stage_title' => $u->stage->title,
@@ -107,6 +102,56 @@ class WorkspaceController extends Controller
             ]),
             'changeLog' => $this->changeLog($measure),
         ]);
+    }
+
+    /**
+     * @return 'current'|'completed'|'locked'|null null — режим наполнения, статусы неприменимы.
+     */
+    private function stageStatus(MeasureStage $stage, ?MeasureStage $currentStage, bool $confirmed): ?string
+    {
+        if (! $confirmed) {
+            return null;
+        }
+
+        if ($currentStage && $stage->id === $currentStage->id) {
+            return 'current';
+        }
+
+        $hasApproved = $stage->periodUpdates()->where('review_state', ReviewState::Approved)->exists();
+
+        return $hasApproved ? 'completed' : 'locked';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function currentStagePayload(MeasureStage $stage, Period $period): array
+    {
+        $update = $stage->periodUpdates()->where('period_id', $period->id)->first();
+        $evidences = $stage->evidences()->where('period_id', $period->id)->get();
+
+        return [
+            'id' => $stage->id,
+            'order' => $stage->order,
+            'title' => $stage->title,
+            'planned_date' => $stage->planned_date?->format('Y-m-d'),
+            'weight' => $stage->weight,
+            'update' => optional($update, fn (StagePeriodUpdate $u) => [
+                'id' => $u->id,
+                'done_text' => $u->done_text,
+                'next_step' => $u->next_step,
+                'next_step_date' => $u->next_step_date?->format('Y-m-d'),
+                'review_state' => $u->review_state->value,
+                'review_comment' => $u->review_comment,
+                'approved_percent' => $u->approved_percent,
+            ]),
+            'evidences' => $evidences->map(fn ($e) => [
+                'id' => $e->id,
+                'title' => $e->title,
+                'type' => $e->type->value,
+                'path_or_url' => $e->type === EvidenceType::Link ? $e->path_or_url : Storage::disk('public')->url($e->path_or_url),
+            ]),
+        ];
     }
 
     /**
@@ -152,17 +197,25 @@ class WorkspaceController extends Controller
         $measure = $this->currentMeasure();
         $period = Period::current();
 
+        if (! $measure->stagesConfirmed()) {
+            abort(403, 'Список этапов ещё не зафиксирован.');
+        }
+
+        $currentStage = $measure->currentStage();
+
+        if (! $currentStage) {
+            abort(403, 'Все этапы уже утверждены.');
+        }
+
         $isSubmit = $request->string('action')->toString() === 'submit';
 
         $rules = [
             'measure_status' => ['required', 'string', 'in:'.implode(',', array_map(fn ($c) => $c->value, MeasureStatus::cases()))],
             'risk_text' => ['nullable', 'string'],
             'needs_decision' => ['boolean'],
-            'stages' => ['required', 'array'],
-            'stages.*.id' => ['required', 'integer', 'exists:measure_stages,id'],
-            'stages.*.done_text' => ['nullable', 'string'],
-            'stages.*.next_step' => ['nullable', 'string'],
-            'stages.*.next_step_date' => ['nullable', 'date'],
+            'done_text' => ['nullable', 'string'],
+            'next_step' => ['nullable', 'string'],
+            'next_step_date' => ['nullable', 'date'],
         ];
 
         if ($isSubmit) {
@@ -173,7 +226,7 @@ class WorkspaceController extends Controller
 
         if ($this->isMeasureStateLocked($measure, $period)) {
             throw ValidationException::withMessages([
-                'measure_status' => 'Этапы уже поданы на проверку — дождитесь решения проректора.',
+                'measure_status' => 'Этап уже подан на проверку — дождитесь решения администратора.',
             ]);
         }
 
@@ -183,23 +236,13 @@ class WorkspaceController extends Controller
             'needs_decision' => $data['needs_decision'] ?? false,
         ]);
 
-        foreach ($data['stages'] as $stageInput) {
-            $stage = $measure->stages->firstWhere('id', $stageInput['id']);
+        $update = StagePeriodUpdate::where('measure_stage_id', $currentStage->id)->where('period_id', $period->id)->first();
 
-            if (! $stage) {
-                continue;
-            }
-
-            $update = StagePeriodUpdate::where('measure_stage_id', $stage->id)->where('period_id', $period->id)->first();
-
-            if (! $update || ! in_array($update->review_state, [ReviewState::Draft, ReviewState::Rework], true)) {
-                continue;
-            }
-
+        if ($update && in_array($update->review_state, [ReviewState::Draft, ReviewState::Rework], true)) {
             $update->update([
-                'done_text' => $stageInput['done_text'] ?? null,
-                'next_step' => $stageInput['next_step'] ?? null,
-                'next_step_date' => $stageInput['next_step_date'] ?? null,
+                'done_text' => $data['done_text'] ?? null,
+                'next_step' => $data['next_step'] ?? null,
+                'next_step_date' => $data['next_step_date'] ?? null,
                 ...($isSubmit ? [
                     'review_state' => ReviewState::Submitted,
                     'submitted_via' => SubmittedVia::MeasureSession,
@@ -219,6 +262,10 @@ class WorkspaceController extends Controller
 
         if ($stage->measure_id !== $measure->id) {
             abort(403);
+        }
+
+        if (! $measure->stagesConfirmed() || $measure->currentStage()?->id !== $stage->id) {
+            abort(403, 'Документы можно прикреплять только к текущему этапу.');
         }
 
         $period = Period::current();
@@ -253,16 +300,45 @@ class WorkspaceController extends Controller
     }
 
     /**
+     * Фиксация списка этапов — необратимый (кроме роли `developer`, веб-сторона)
+     * переход из режима наполнения в последовательную работу. Осознанное действие
+     * исполнителя, не путать с утверждением отчёта по этапу администратором — другое
+     * действие, другой экран.
+     */
+    public function confirmStages(): RedirectResponse
+    {
+        $measure = $this->currentMeasure();
+
+        if ($measure->stagesConfirmed()) {
+            return back();
+        }
+
+        if ($measure->stages()->count() < 1) {
+            throw ValidationException::withMessages([
+                'stages' => 'Нужен хотя бы один этап, чтобы зафиксировать список.',
+            ]);
+        }
+
+        $measure->update(['stages_confirmed_at' => now()]);
+
+        return back()->with('status', 'Список этапов зафиксирован — теперь доступен только текущий этап.');
+    }
+
+    /**
      * Заведение этапов — раньше было исключительно веб-администраторским действием
      * (координатор наполняет план), но по решению заказчика координатор больше не
      * отдельная веб-учётка: структуру этапов и веса теперь заводит тот, у кого логин
-     * и пароль мероприятия ([[Роли и права#Доступ к мероприятию (неименной)]]). Веб-
-     * администратор сохраняет ту же возможность как оверрайд —
-     * {@see MeasureStageController}.
+     * и пароль мероприятия ([[Роли и права#Доступ к мероприятию (неименной)]]), и
+     * только пока список не зафиксирован ({@see confirmStages()}) — после фиксации
+     * это может только роль `developer` через {@see MeasureStageController}.
      */
     public function storeStage(Request $request): RedirectResponse
     {
         $measure = $this->currentMeasure();
+
+        if ($measure->stagesConfirmed()) {
+            abort(403, 'Список этапов уже зафиксирован.');
+        }
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -285,6 +361,10 @@ class WorkspaceController extends Controller
             abort(403);
         }
 
+        if ($measure->stagesConfirmed()) {
+            abort(403, 'Список этапов уже зафиксирован.');
+        }
+
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'planned_date' => ['nullable', 'date'],
@@ -302,6 +382,10 @@ class WorkspaceController extends Controller
 
         if ($stage->measure_id !== $measure->id) {
             abort(403);
+        }
+
+        if ($measure->stagesConfirmed()) {
+            abort(403, 'Список этапов уже зафиксирован.');
         }
 
         $hasApprovedHistory = $stage->periodUpdates()->where('review_state', ReviewState::Approved)->exists();
@@ -327,11 +411,15 @@ class WorkspaceController extends Controller
 
     private function ensureDraftRows(Measure $measure, Period $period): void
     {
-        foreach ($measure->stages as $stage) {
-            StagePeriodUpdate::firstOrCreate(
-                ['measure_stage_id' => $stage->id, 'period_id' => $period->id],
-                ['review_state' => ReviewState::Draft],
-            );
+        if ($measure->stagesConfirmed()) {
+            $currentStage = $measure->currentStage();
+
+            if ($currentStage) {
+                StagePeriodUpdate::firstOrCreate(
+                    ['measure_stage_id' => $currentStage->id, 'period_id' => $period->id],
+                    ['review_state' => ReviewState::Draft],
+                );
+            }
         }
 
         MeasurePeriodState::firstOrCreate(

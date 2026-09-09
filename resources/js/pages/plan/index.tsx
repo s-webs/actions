@@ -34,6 +34,7 @@ interface MeasureRow {
     percent: number;
     risk_level: RiskLevel | null;
     needs_decision: boolean;
+    stages_confirmed: boolean;
     stages: StageRow[];
 }
 
@@ -52,6 +53,7 @@ interface PlanIndexProps {
     responsibles: { id: number; name: string }[];
     statuses: MeasureStatus[];
     canManageStages: boolean;
+    isDeveloper: boolean;
 }
 
 const STATUS_LABELS: Record<MeasureStatus, string> = {
@@ -136,13 +138,35 @@ function AddStageForm({ measureId }: { measureId: number }) {
     );
 }
 
-function StageManager({ measureId, stages, canManage }: { measureId: number; stages: StageRow[]; canManage: boolean }) {
-    if (stages.length === 0 && !canManage) {
-        return <p className="text-muted-foreground text-sm">Этапы ещё не заведены координатором.</p>;
+function StageManager({
+    measureId,
+    stages,
+    canManage,
+    stagesConfirmed,
+    isDeveloper,
+}: {
+    measureId: number;
+    stages: StageRow[];
+    canManage: boolean;
+    stagesConfirmed: boolean;
+    isDeveloper: boolean;
+}) {
+    // Список этапов заводит и фиксирует исполнитель на своём рабочем месте (task-020) —
+    // здесь у администратора остаётся оверрайд только до фиксации; после неё правки
+    // доступны исключительно разработчику ([[Заполнение и утверждение#Последовательное заполнение этапов]]).
+    const editable = isDeveloper || (canManage && !stagesConfirmed);
+
+    if (stages.length === 0 && !editable) {
+        return <p className="text-muted-foreground text-sm">Этапы ещё не заведены исполнителем.</p>;
     }
 
     return (
         <div>
+            {stagesConfirmed && (
+                <p className="mb-2 text-xs text-muted-foreground">
+                    Список этапов зафиксирован{!isDeveloper && canManage && ' — редактирование доступно только разработчику'}.
+                </p>
+            )}
             {stages.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                     Этапы ещё не заведены — без них рабочее место мероприятия не покажет форму отчёта и загрузки файлов.
@@ -157,7 +181,7 @@ function StageManager({ measureId, stages, canManage }: { measureId: number; sta
                             <th className="pr-4">Плановая дата</th>
                             <th className="pr-4">Вес</th>
                             <th className="pr-4">Состояние проверки</th>
-                            {canManage && <th></th>}
+                            {editable && <th></th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -168,7 +192,7 @@ function StageManager({ measureId, stages, canManage }: { measureId: number; sta
                                 <td className="pr-4">{s.planned_date ?? '—'}</td>
                                 <td className="pr-4">{s.weight}%</td>
                                 <td className="pr-4">{s.review_state ?? 'черновик'}</td>
-                                {canManage && (
+                                {editable && (
                                     <td>
                                         <Button
                                             type="button"
@@ -190,12 +214,12 @@ function StageManager({ measureId, stages, canManage }: { measureId: number; sta
                     </tbody>
                 </table>
             )}
-            {canManage && <AddStageForm measureId={measureId} />}
+            {editable && <AddStageForm measureId={measureId} />}
         </div>
     );
 }
 
-export default function PlanIndex({ measures, filters, directions, responsibles, statuses, canManageStages }: PlanIndexProps) {
+export default function PlanIndex({ measures, filters, directions, responsibles, statuses, canManageStages, isDeveloper }: PlanIndexProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [search, setSearch] = useState(filters.search ?? '');
 
@@ -383,7 +407,13 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
                                                 <Collapsible open>
                                                     <CollapsibleTrigger className="hidden" />
                                                     <CollapsibleContent>
-                                                        <StageManager measureId={m.id} stages={m.stages} canManage={canManageStages} />
+                                                        <StageManager
+                                                            measureId={m.id}
+                                                            stages={m.stages}
+                                                            canManage={canManageStages}
+                                                            stagesConfirmed={m.stages_confirmed}
+                                                            isDeveloper={isDeveloper}
+                                                        />
                                                     </CollapsibleContent>
                                                 </Collapsible>
                                             </td>

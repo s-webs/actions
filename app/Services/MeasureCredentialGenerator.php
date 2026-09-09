@@ -6,14 +6,18 @@ use App\Models\Measure;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
  * Генерация и ротация учётных данных мероприятия —
- * [[Функциональные требования#4.14 Модуль «Учётные данные мероприятий»]]. Пароль хранится
- * только как хеш (`password_hash`, [[Роли и права#Реализация]]) — необратимо, поэтому
- * "показать пароль" содержательно возможно только в момент генерации/ротации, когда
- * открытый текст ещё существует в памяти; повторно "посмотреть" уже установленный пароль
- * нельзя ни программно, ни через БД. UI это отражает явно — см. `credentials/index.tsx`.
+ * [[Функциональные требования#4.14 Модуль «Учётные данные мероприятий»]]. Пароль
+ * хранится дважды: `password_hash` (bcrypt, необратимо) — источник для самой
+ * аутентификации (`Auth::attempt`), и `password` (обратимо зашифрован через `encrypted`
+ * cast на модели) — чтобы администратор мог посмотреть/скопировать пароль в любой
+ * момент, а не только один раз при генерации (решение заказчика, см.
+ * `credentials/index.tsx`). `login_token` — случайная строка для прямой ссылки входа
+ * (обходит форму логин+пароль); ротируется вместе с паролем, чтобы «Перегенерировать»
+ * гарантированно отзывал и старую ссылку тоже.
  */
 class MeasureCredentialGenerator
 {
@@ -28,6 +32,8 @@ class MeasureCredentialGenerator
         $measure->credential()->updateOrCreate([], [
             'login' => $login,
             'password_hash' => Hash::make($password),
+            'password' => $password,
+            'login_token' => Str::random(40),
             'rotated_at' => now(),
             'rotated_by' => $rotatedBy?->id,
         ]);

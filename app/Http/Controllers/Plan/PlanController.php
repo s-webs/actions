@@ -44,6 +44,7 @@ class PlanController extends Controller
                 'percent' => $measure->percent,
                 'risk_level' => $measure->risk_level?->value,
                 'needs_decision' => (bool) $measure->latestPeriodState?->needs_decision,
+                'stages_confirmed' => $measure->stagesConfirmed(),
                 'stages' => $measure->stages->map(fn ($stage) => [
                     'id' => $stage->id,
                     'order' => $stage->order,
@@ -66,6 +67,7 @@ class PlanController extends Controller
             'responsibles' => Responsible::orderBy('name')->get(['id', 'name']),
             'statuses' => collect(MeasureStatus::cases())->map->value,
             'canManageStages' => Auth::user()->can('manage', Measure::class),
+            'isDeveloper' => Auth::user()->hasRole('developer'),
         ]);
     }
 

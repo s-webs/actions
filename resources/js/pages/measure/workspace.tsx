@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { LoaderCircle } from 'lucide-react';
+import { Check, Lock, LoaderCircle } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
 type ReviewState = 'draft' | 'submitted' | 'approved' | 'rejected' | 'rework';
+type StageStatus = 'current' | 'completed' | 'locked';
 
 interface StageEvidence {
     id: number;
@@ -30,7 +31,16 @@ interface StageUpdate {
     approved_percent: number | null;
 }
 
-interface Stage {
+interface StageListItem {
+    id: number;
+    order: number;
+    title: string;
+    planned_date: string | null;
+    weight: number;
+    status: StageStatus | null;
+}
+
+interface CurrentStage {
     id: number;
     order: number;
     title: string;
@@ -70,7 +80,9 @@ interface WorkspaceProps {
     };
     period: { id: number; month: string };
     measureState: { status: MeasureStatus; risk_text: string | null; needs_decision: boolean; locked: boolean };
-    stages: Stage[];
+    stagesConfirmed: boolean;
+    stageList: StageListItem[];
+    currentStage: CurrentStage | null;
     history: HistoryEntry[];
     changeLog: ChangeLogEntry[];
 }
@@ -95,6 +107,7 @@ const FIELD_LABELS: Record<string, string> = {
     weight: 'Вес',
     planned_date: 'Плановая дата',
     proctor_comment: 'Комментарий проректора',
+    stages_confirmed_at: 'Список этапов зафиксирован',
 };
 
 function ChangeLogCard({ entry }: { entry: ChangeLogEntry }) {
@@ -145,7 +158,7 @@ const REVIEW_LABELS: Record<ReviewState, string> = {
 
 const ACCEPTED_FILE_EXTENSIONS = '.doc,.docx,.pdf,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg,.tif,.tiff,.heic,.heif';
 
-function StageEditForm({ stage, onDone }: { stage: Stage; onDone: () => void }) {
+function StageEditForm({ stage, onDone }: { stage: { id: number; title: string; planned_date: string | null; weight: number }; onDone: () => void }) {
     const { data, setData, patch, processing, errors } = useForm({
         title: stage.title,
         planned_date: stage.planned_date ?? '',
@@ -204,43 +217,140 @@ function AddStageForm() {
     }
 
     return (
-        <section className="flex flex-col gap-3 rounded-lg border border-dashed p-4">
-            <h2 className="font-medium">Добавить этап</h2>
-            <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-                <div className="grid gap-1">
-                    <Label htmlFor="new-stage-title">Название этапа</Label>
-                    <Input id="new-stage-title" className="w-64" value={data.title} onChange={(e) => setData('title', e.target.value)} />
-                    {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
-                </div>
-                <div className="grid gap-1">
-                    <Label htmlFor="new-stage-date">Плановая дата</Label>
-                    <Input
-                        id="new-stage-date"
-                        type="date"
-                        className="w-40"
-                        value={data.planned_date}
-                        onChange={(e) => setData('planned_date', e.target.value)}
-                    />
-                    {errors.planned_date && <p className="text-xs text-destructive">{errors.planned_date}</p>}
-                </div>
-                <div className="grid gap-1">
-                    <Label htmlFor="new-stage-weight">Вес, %</Label>
-                    <Input
-                        id="new-stage-weight"
-                        type="number"
-                        min={1}
-                        max={100}
-                        className="w-24"
-                        value={data.weight}
-                        onChange={(e) => setData('weight', e.target.value)}
-                    />
-                    {errors.weight && <p className="text-xs text-destructive">{errors.weight}</p>}
-                </div>
-                <Button type="submit" size="sm" disabled={processing}>
-                    Добавить этап
-                </Button>
-            </form>
+        <form onSubmit={submit} className="flex flex-wrap items-end gap-3 border-t pt-4">
+            <div className="grid gap-1">
+                <Label htmlFor="new-stage-title">Название этапа</Label>
+                <Input id="new-stage-title" className="w-64" value={data.title} onChange={(e) => setData('title', e.target.value)} />
+                {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+            </div>
+            <div className="grid gap-1">
+                <Label htmlFor="new-stage-date">Плановая дата</Label>
+                <Input
+                    id="new-stage-date"
+                    type="date"
+                    className="w-40"
+                    value={data.planned_date}
+                    onChange={(e) => setData('planned_date', e.target.value)}
+                />
+                {errors.planned_date && <p className="text-xs text-destructive">{errors.planned_date}</p>}
+            </div>
+            <div className="grid gap-1">
+                <Label htmlFor="new-stage-weight">Вес, %</Label>
+                <Input
+                    id="new-stage-weight"
+                    type="number"
+                    min={1}
+                    max={100}
+                    className="w-24"
+                    value={data.weight}
+                    onChange={(e) => setData('weight', e.target.value)}
+                />
+                {errors.weight && <p className="text-xs text-destructive">{errors.weight}</p>}
+            </div>
+            <Button type="submit" size="sm" disabled={processing}>
+                Добавить этап
+            </Button>
+        </form>
+    );
+}
+
+/** Режим наполнения — до фиксации списка, [[Заполнение и утверждение#Последовательное заполнение этапов]]. */
+function StageSetup({ stages }: { stages: StageListItem[] }) {
+    const [editingId, setEditingId] = useState<number | null>(null);
+
+    function confirmStages() {
+        if (!confirm('Утвердить список этапов? После этого состав и веса менять будет нельзя.')) {
+            return;
+        }
+        router.post(route('measure.stages.confirm'), {}, { preserveScroll: true });
+    }
+
+    return (
+        <section className="flex flex-col gap-4 rounded-lg border p-4">
+            <h2 className="font-medium">Этапы мероприятия</h2>
+            <p className="text-muted-foreground text-sm">
+                Добавьте все этапы мероприятия, затем нажмите «Утвердить этапы» — после этого состав и веса менять будет нельзя, а
+                работа перейдёт в последовательный режим: один этап за раз.
+            </p>
+
+            {stages.length === 0 ? (
+                <p className="text-muted-foreground text-sm">Этапов пока нет — добавьте хотя бы один ниже.</p>
+            ) : (
+                <ul className="flex flex-col gap-2">
+                    {stages.map((s) => (
+                        <li key={s.id} className="rounded-md border p-3">
+                            {editingId === s.id ? (
+                                <StageEditForm stage={s} onDone={() => setEditingId(null)} />
+                            ) : (
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="font-medium">
+                                            {s.order}. {s.title}
+                                        </p>
+                                        <p className="text-muted-foreground text-sm">
+                                            {s.planned_date ?? '—'} · Вес: {s.weight}%
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button type="button" variant="ghost" size="sm" onClick={() => setEditingId(s.id)}>
+                                            Изменить
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                if (confirm(`Удалить этап «${s.title}»?`)) {
+                                                    router.delete(route('measure.stages.destroy', s.id), { preserveScroll: true });
+                                                }
+                                            }}
+                                        >
+                                            Удалить
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <AddStageForm />
+
+            <Button type="button" onClick={confirmStages} disabled={stages.length === 0} className="self-start">
+                Утвердить этапы
+            </Button>
         </section>
+    );
+}
+
+function StageSidebar({ stages }: { stages: StageListItem[] }) {
+    return (
+        <aside className="flex w-full shrink-0 flex-col gap-2 sm:w-56">
+            <h2 className="text-muted-foreground text-sm font-medium">Этапы</h2>
+            <ul className="flex flex-col gap-1">
+                {stages.map((s) => (
+                    <li
+                        key={s.id}
+                        className={`flex items-start gap-2 rounded-md border p-2 text-sm ${
+                            s.status === 'current' ? 'border-primary bg-primary/5' : ''
+                        }`}
+                    >
+                        {s.status === 'completed' && <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />}
+                        {s.status === 'locked' && <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
+                        {s.status === 'current' && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                        <div className="flex flex-col">
+                            <span className={s.status === 'locked' ? 'text-muted-foreground' : 'font-medium'}>
+                                {s.order}. {s.title}
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                                {s.planned_date ?? '—'} · {s.weight}%
+                            </span>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        </aside>
     );
 }
 
@@ -292,32 +402,21 @@ function EvidenceUploader({ stageId }: { stageId: number }) {
 }
 
 /**
- * Рабочее место мероприятия (guard `measure`) — task-007,
- * [[Функциональные требования#4.7 Рабочее место мероприятия]].
+ * Рабочее место мероприятия (guard `measure`) — task-007, task-020
+ * (последовательное заполнение), [[Функциональные требования#4.7 Рабочее место мероприятия]].
  */
-export default function Workspace({ measure, period, measureState, stages, history, changeLog }: WorkspaceProps) {
-    const [editingStageId, setEditingStageId] = useState<number | null>(null);
+export default function Workspace({ measure, period, measureState, stagesConfirmed, stageList, currentStage, history, changeLog }: WorkspaceProps) {
     const { data, setData, patch, transform, processing, errors } = useForm({
         measure_status: measureState.status,
         risk_text: measureState.risk_text ?? '',
         needs_decision: measureState.needs_decision,
         submitted_by_name: '',
-        stages: stages.map((s) => ({
-            id: s.id,
-            done_text: s.update?.done_text ?? '',
-            next_step: s.update?.next_step ?? '',
-            next_step_date: s.update?.next_step_date ?? '',
-        })),
+        done_text: currentStage?.update?.done_text ?? '',
+        next_step: currentStage?.update?.next_step ?? '',
+        next_step_date: currentStage?.update?.next_step_date ?? '',
     });
 
     const locked = measureState.locked;
-
-    function updateStageField(stageId: number, field: 'done_text' | 'next_step' | 'next_step_date', value: string) {
-        setData(
-            'stages',
-            data.stages.map((s) => (s.id === stageId ? { ...s, [field]: value } : s)),
-        );
-    }
 
     function save(e: FormEvent) {
         e.preventDefault();
@@ -331,8 +430,10 @@ export default function Workspace({ measure, period, measureState, stages, histo
         patch(route('measure.workspace.update'));
     }
 
+    const reviewState = currentStage?.update?.review_state ?? 'draft';
+
     return (
-        <div className="mx-auto flex max-w-4xl flex-col gap-8 p-6">
+        <div className="mx-auto flex max-w-5xl flex-col gap-8 p-6">
             <Head title={`Мероприятие №${measure.number}`} />
 
             <header className="flex items-start justify-between">
@@ -350,195 +451,193 @@ export default function Workspace({ measure, period, measureState, stages, histo
                 </Button>
             </header>
 
-            {locked && (
-                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
-                    Этапы поданы на проверку — редактирование заблокировано до решения проректора.
-                </div>
-            )}
+            {!stagesConfirmed ? (
+                <StageSetup stages={stageList} />
+            ) : (
+                <div className="flex flex-col gap-6 sm:flex-row">
+                    <StageSidebar stages={stageList} />
 
-            <section className="flex flex-col gap-4 rounded-lg border p-4">
-                <h2 className="font-medium">Статус мероприятия</h2>
-
-                <div className="grid gap-2">
-                    <Label>Статус</Label>
-                    <Select value={data.measure_status} onValueChange={(v) => setData('measure_status', v as MeasureStatus)} disabled={locked}>
-                        <SelectTrigger className="w-64">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {(Object.keys(STATUS_LABELS) as MeasureStatus[]).map((s) => (
-                                <SelectItem key={s} value={s}>
-                                    {STATUS_LABELS[s]}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="grid gap-2">
-                    <Label htmlFor="risk_text">Риск / проблема</Label>
-                    <Textarea
-                        id="risk_text"
-                        value={data.risk_text}
-                        onChange={(e) => setData('risk_text', e.target.value)}
-                        disabled={locked}
-                    />
-                </div>
-
-                <label className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                        checked={data.needs_decision}
-                        onCheckedChange={(v) => setData('needs_decision', Boolean(v))}
-                        disabled={locked}
-                    />
-                    Требуется решение руководства
-                </label>
-            </section>
-
-            {stages.map((stage) => {
-                const stageData = data.stages.find((s) => s.id === stage.id)!;
-                const reviewState = stage.update?.review_state ?? 'draft';
-
-                return (
-                    <section key={stage.id} className="flex flex-col gap-4 rounded-lg border p-4">
-                        <div className="flex items-center justify-between">
-                            <h2 className="font-medium">
-                                Этап {stage.order}. {stage.title}
-                            </h2>
-                            <div className="flex items-center gap-2">
-                                <Badge variant="outline">{REVIEW_LABELS[reviewState]}</Badge>
-                                <Button type="button" variant="ghost" size="sm" onClick={() => setEditingStageId(stage.id)}>
-                                    Изменить
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                        if (confirm(`Удалить этап «${stage.title}»?`)) {
-                                            router.delete(route('measure.stages.destroy', stage.id), { preserveScroll: true });
-                                        }
-                                    }}
-                                >
-                                    Удалить
-                                </Button>
+                    <div className="flex flex-1 flex-col gap-8">
+                        {locked && (
+                            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+                                Этап подан на проверку — редактирование заблокировано до решения администратора.
                             </div>
-                        </div>
+                        )}
 
-                        {editingStageId === stage.id ? (
-                            <StageEditForm stage={stage} onDone={() => setEditingStageId(null)} />
+                        {!currentStage ? (
+                            <section className="rounded-lg border border-green-300 bg-green-50 p-4 text-sm text-green-900">
+                                Все этапы утверждены — мероприятие выполнено на {measure.percent}%.
+                            </section>
                         ) : (
-                            <p className="text-muted-foreground text-sm">
-                                Плановая дата: {stage.planned_date ?? '—'} · Вес: {stage.weight}%
-                            </p>
+                            <>
+                                <section className="flex flex-col gap-4 rounded-lg border p-4">
+                                    <h2 className="font-medium">Статус мероприятия</h2>
+
+                                    <div className="grid gap-2">
+                                        <Label>Статус</Label>
+                                        <Select
+                                            value={data.measure_status}
+                                            onValueChange={(v) => setData('measure_status', v as MeasureStatus)}
+                                            disabled={locked}
+                                        >
+                                            <SelectTrigger className="w-64">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(Object.keys(STATUS_LABELS) as MeasureStatus[]).map((s) => (
+                                                    <SelectItem key={s} value={s}>
+                                                        {STATUS_LABELS[s]}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="risk_text">Риск / проблема</Label>
+                                        <Textarea
+                                            id="risk_text"
+                                            value={data.risk_text}
+                                            onChange={(e) => setData('risk_text', e.target.value)}
+                                            disabled={locked}
+                                        />
+                                    </div>
+
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <Checkbox
+                                            checked={data.needs_decision}
+                                            onCheckedChange={(v) => setData('needs_decision', Boolean(v))}
+                                            disabled={locked}
+                                        />
+                                        Требуется решение руководства
+                                    </label>
+                                </section>
+
+                                <section className="flex flex-col gap-4 rounded-lg border p-4">
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="font-medium">
+                                            Этап {currentStage.order}. {currentStage.title}
+                                        </h2>
+                                        <Badge variant="outline">{REVIEW_LABELS[reviewState]}</Badge>
+                                    </div>
+                                    <p className="text-muted-foreground text-sm">
+                                        Плановая дата: {currentStage.planned_date ?? '—'} · Вес: {currentStage.weight}%
+                                    </p>
+
+                                    {currentStage.update?.review_comment && (
+                                        <p className="rounded-md bg-muted p-2 text-sm">
+                                            Комментарий администратора: {currentStage.update.review_comment}
+                                        </p>
+                                    )}
+
+                                    <div className="grid gap-2">
+                                        <Label>Что сделано за период</Label>
+                                        <Textarea
+                                            value={data.done_text}
+                                            onChange={(e) => setData('done_text', e.target.value)}
+                                            disabled={locked}
+                                        />
+                                    </div>
+
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        <div className="grid gap-2">
+                                            <Label>Следующий шаг</Label>
+                                            <Textarea
+                                                value={data.next_step}
+                                                onChange={(e) => setData('next_step', e.target.value)}
+                                                disabled={locked}
+                                            />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label>Срок следующего шага</Label>
+                                            <Input
+                                                type="date"
+                                                value={data.next_step_date}
+                                                onChange={(e) => setData('next_step_date', e.target.value)}
+                                                disabled={locked}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2">
+                                        <Label>Подтверждающие документы</Label>
+                                        {currentStage.evidences.length > 0 && (
+                                            <ul className="list-disc pl-5 text-sm">
+                                                {currentStage.evidences.map((e) => (
+                                                    <li key={e.id}>
+                                                        <a
+                                                            href={e.path_or_url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-primary underline-offset-4 hover:underline"
+                                                        >
+                                                            {e.title ?? e.path_or_url}
+                                                        </a>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                        {!locked && <EvidenceUploader stageId={currentStage.id} />}
+                                    </div>
+                                </section>
+
+                                <section className="flex flex-col gap-4 rounded-lg border p-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="submitted_by_name">ФИО и должность (обязательно при отправке на проверку)</Label>
+                                        <Input
+                                            id="submitted_by_name"
+                                            value={data.submitted_by_name}
+                                            onChange={(e) => setData('submitted_by_name', e.target.value)}
+                                            disabled={locked}
+                                        />
+                                        {errors.submitted_by_name && <p className="text-sm text-destructive">{errors.submitted_by_name}</p>}
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <Button type="button" variant="secondary" onClick={save} disabled={processing || locked}>
+                                            {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                                            Сохранить черновик
+                                        </Button>
+                                        <Button type="button" onClick={submit} disabled={processing || locked}>
+                                            {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                                            Отправить на проверку
+                                        </Button>
+                                    </div>
+                                </section>
+                            </>
                         )}
 
-                        {stage.update?.review_comment && (
-                            <p className="rounded-md bg-muted p-2 text-sm">Комментарий проректора: {stage.update.review_comment}</p>
-                        )}
-
-                        <div className="grid gap-2">
-                            <Label>Что сделано за период</Label>
-                            <Textarea
-                                value={stageData.done_text}
-                                onChange={(e) => updateStageField(stage.id, 'done_text', e.target.value)}
-                                disabled={locked}
-                            />
-                        </div>
-
-                        <div className="grid gap-2 sm:grid-cols-2">
-                            <div className="grid gap-2">
-                                <Label>Следующий шаг</Label>
-                                <Textarea
-                                    value={stageData.next_step}
-                                    onChange={(e) => updateStageField(stage.id, 'next_step', e.target.value)}
-                                    disabled={locked}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label>Срок следующего шага</Label>
-                                <Input
-                                    type="date"
-                                    value={stageData.next_step_date}
-                                    onChange={(e) => updateStageField(stage.id, 'next_step_date', e.target.value)}
-                                    disabled={locked}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <Label>Подтверждающие документы</Label>
-                            {stage.evidences.length > 0 && (
-                                <ul className="list-disc pl-5 text-sm">
-                                    {stage.evidences.map((e) => (
-                                        <li key={e.id}>
-                                            <a href={e.path_or_url} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
-                                                {e.title ?? e.path_or_url}
-                                            </a>
+                        {history.length > 0 && (
+                            <section className="flex flex-col gap-3 rounded-lg border p-4">
+                                <h2 className="font-medium">Лента результатов проверки</h2>
+                                <ul className="flex flex-col gap-2 text-sm">
+                                    {history.map((h) => (
+                                        <li key={h.id} className="border-t pt-2 first:border-t-0 first:pt-0">
+                                            <strong>{REVIEW_LABELS[h.review_state]}</strong> — {h.stage_title}
+                                            {h.approved_percent !== null && ` (${h.approved_percent}%)`}
+                                            {h.approved_at && <span className="text-muted-foreground"> · {h.approved_at}</span>}
+                                            {h.review_comment && <p className="text-muted-foreground">{h.review_comment}</p>}
                                         </li>
                                     ))}
                                 </ul>
+                            </section>
+                        )}
+
+                        <section className="flex flex-col gap-3 rounded-lg border p-4">
+                            <h2 className="font-medium">Все изменения</h2>
+                            {changeLog.length === 0 ? (
+                                <p className="text-muted-foreground text-sm">Изменений пока нет.</p>
+                            ) : (
+                                <div className="flex flex-col gap-2">
+                                    {changeLog.map((entry) => (
+                                        <ChangeLogCard key={entry.id} entry={entry} />
+                                    ))}
+                                </div>
                             )}
-                            {!locked && <EvidenceUploader stageId={stage.id} />}
-                        </div>
-                    </section>
-                );
-            })}
-
-            <AddStageForm />
-
-            <section className="flex flex-col gap-4 rounded-lg border p-4">
-                <div className="grid gap-2">
-                    <Label htmlFor="submitted_by_name">ФИО и должность (обязательно при отправке на проверку)</Label>
-                    <Input
-                        id="submitted_by_name"
-                        value={data.submitted_by_name}
-                        onChange={(e) => setData('submitted_by_name', e.target.value)}
-                        disabled={locked}
-                    />
-                    {errors.submitted_by_name && <p className="text-sm text-destructive">{errors.submitted_by_name}</p>}
-                </div>
-
-                <div className="flex gap-3">
-                    <Button type="button" variant="secondary" onClick={save} disabled={processing || locked}>
-                        {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                        Сохранить черновик
-                    </Button>
-                    <Button type="button" onClick={submit} disabled={processing || locked}>
-                        {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                        Отправить на проверку
-                    </Button>
-                </div>
-            </section>
-
-            {history.length > 0 && (
-                <section className="flex flex-col gap-3 rounded-lg border p-4">
-                    <h2 className="font-medium">Лента результатов проверки</h2>
-                    <ul className="flex flex-col gap-2 text-sm">
-                        {history.map((h) => (
-                            <li key={h.id} className="border-t pt-2 first:border-t-0 first:pt-0">
-                                <strong>{REVIEW_LABELS[h.review_state]}</strong> — {h.stage_title}
-                                {h.approved_percent !== null && ` (${h.approved_percent}%)`}
-                                {h.approved_at && <span className="text-muted-foreground"> · {h.approved_at}</span>}
-                                {h.review_comment && <p className="text-muted-foreground">{h.review_comment}</p>}
-                            </li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-
-            <section className="flex flex-col gap-3 rounded-lg border p-4">
-                <h2 className="font-medium">Все изменения</h2>
-                {changeLog.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">Изменений пока нет.</p>
-                ) : (
-                    <div className="flex flex-col gap-2">
-                        {changeLog.map((entry) => (
-                            <ChangeLogCard key={entry.id} entry={entry} />
-                        ))}
+                        </section>
                     </div>
-                )}
-            </section>
+                </div>
+            )}
         </div>
     );
 }

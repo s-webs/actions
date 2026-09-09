@@ -1,11 +1,14 @@
 <?php
 
 use App\Enums\ReviewState;
+use App\Models\Evidence;
 use App\Models\Measure;
 use App\Models\MeasureCredential;
 use App\Models\MeasureStage;
 use App\Models\Period;
 use App\Models\StagePeriodUpdate;
+use App\Models\User;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -15,7 +18,22 @@ function loginAsMeasure(Measure $measure): MeasureCredential
     return MeasureCredential::factory()->create(['measure_id' => $measure->id]);
 }
 
-test('the workspace auto-creates a draft row for the current period on first visit', function () {
+function confirmStages(MeasureCredential $credential): void
+{
+    test()->actingAs($credential, 'measure')->post(route('measure.stages.confirm'))->assertRedirect();
+}
+
+/** Administrator used to approve/reject the current stage in the sequential-progression tests. */
+function adminUser(): User
+{
+    test()->seed(RoleSeeder::class);
+    $user = User::factory()->create();
+    $user->assignRole('administrator');
+
+    return $user;
+}
+
+test('before confirmation the workspace shows the stage setup screen, no draft rows', function () {
     $measure = Measure::factory()->create();
     $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 1]);
     $credential = loginAsMeasure($measure);
@@ -24,20 +42,167 @@ test('the workspace auto-creates a draft row for the current period on first vis
         ->get(route('measure.workspace'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('measure/workspace')
-            ->where('stages.0.id', $stage->id)
-            ->where('stages.0.update.review_state', 'draft')
-            ->where('measureState.locked', false));
+            ->where('stagesConfirmed', false)
+            ->where('stageList.0.id', $stage->id)
+            ->where('currentStage', null));
 
-    expect(Period::count())->toBe(1)
-        ->and(StagePeriodUpdate::where('measure_stage_id', $stage->id)->exists())->toBeTrue();
+    expect(StagePeriodUpdate::count())->toBe(0);
 });
 
-test('saving a draft updates the stage fact fields without submitting', function () {
+test('confirming the stage list requires at least one stage', function () {
+    $measure = Measure::factory()->create();
+    $credential = loginAsMeasure($measure);
+
+    $this->actingAs($credential, 'measure')
+        ->post(route('measure.stages.confirm'))
+        ->assertSessionHasErrors('stages');
+
+    expect($measure->fresh()->stages_confirmed_at)->toBeNull();
+});
+
+test('confirming the stage list locks the structure and reveals the first stage as current', function () {
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 1]);
+    $credential = loginAsMeasure($measure);
+
+    confirmStages($credential);
+
+    expect($measure->fresh()->stages_confirmed_at)->not->toBeNull();
+
+    $this->actingAs($credential, 'measure')
+        ->get(route('measure.workspace'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('stagesConfirmed', true)
+            ->where('currentStage.id', $stage->id)
+            ->where('stageList.0.status', 'current'));
+
+    expect(StagePeriodUpdate::where('measure_stage_id', $stage->id)->exists())->toBeTrue();
+});
+
+test('after confirmation, stage structure can no longer be managed from the measure guard', function () {
     $measure = Measure::factory()->create();
     $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
     $credential = loginAsMeasure($measure);
 
-    // Visit first so the draft row and current period exist.
+    confirmStages($credential);
+
+    $this->actingAs($credential, 'measure')
+        ->post(route('measure.stages.store'), ['title' => 'X', 'weight' => 10])
+        ->assertForbidden();
+
+    $this->actingAs($credential, 'measure')
+        ->patch(route('measure.stages.update', $stage), ['title' => 'X', 'weight' => 10])
+        ->assertForbidden();
+
+    $this->actingAs($credential, 'measure')
+        ->delete(route('measure.stages.destroy', $stage))
+        ->assertForbidden();
+});
+
+test('the second stage stays locked and unreachable until the first is approved', function () {
+    $measure = Measure::factory()->create();
+    $first = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 1, 'weight' => 50]);
+    $second = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 2, 'weight' => 50]);
+    $credential = loginAsMeasure($measure);
+
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
+
+    $this->actingAs($credential, 'measure')
+        ->get(route('measure.workspace'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('currentStage.id', $first->id)
+            ->where('stageList.1.status', 'locked'));
+
+    // Directly posting evidence to the locked stage is rejected, not just hidden in the UI.
+    $this->actingAs($credential, 'measure')
+        ->post(route('measure.workspace.evidence', $second), ['url' => 'https://example.test/x.pdf'])
+        ->assertForbidden();
+});
+
+test('approving the current stage opens the next one', function () {
+    $measure = Measure::factory()->create();
+    $first = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 1, 'weight' => 50]);
+    $second = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 2, 'weight' => 50]);
+    $credential = loginAsMeasure($measure);
+    $admin = adminUser();
+
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
+    $period = Period::current();
+
+    $update = StagePeriodUpdate::where('measure_stage_id', $first->id)->where('period_id', $period->id)->first();
+    Evidence::factory()->create(['measure_id' => $measure->id, 'measure_stage_id' => $first->id, 'period_id' => $period->id]);
+    $update->update(['review_state' => ReviewState::Submitted]);
+
+    $this->actingAs($admin, 'web')->post(route('approval.approve', $update), ['approved_percent' => 100])->assertRedirect();
+
+    expect($measure->fresh()->currentStage()?->id)->toBe($second->id);
+
+    $this->actingAs($credential, 'measure')
+        ->get(route('measure.workspace'))
+        ->assertInertia(fn (Assert $page) => $page->where('currentStage.id', $second->id));
+});
+
+test('rejecting the current stage does not advance to the next one', function () {
+    $measure = Measure::factory()->create();
+    $first = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 1]);
+    MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 2]);
+    $credential = loginAsMeasure($measure);
+    $admin = adminUser();
+
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
+    $period = Period::current();
+
+    $update = StagePeriodUpdate::where('measure_stage_id', $first->id)->where('period_id', $period->id)->first();
+    $update->update(['review_state' => ReviewState::Submitted]);
+
+    $this->actingAs($admin, 'web')->post(route('approval.reject', $update), ['review_comment' => 'Недостаточно данных'])->assertRedirect();
+
+    expect($measure->fresh()->currentStage()?->id)->toBe($first->id);
+});
+
+test('once every stage is approved the workspace shows completion instead of a form', function () {
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'weight' => 100]);
+    $credential = loginAsMeasure($measure);
+    $admin = adminUser();
+
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
+    $period = Period::current();
+
+    $update = StagePeriodUpdate::where('measure_stage_id', $stage->id)->where('period_id', $period->id)->first();
+    Evidence::factory()->create(['measure_id' => $measure->id, 'measure_stage_id' => $stage->id, 'period_id' => $period->id]);
+    $update->update(['review_state' => ReviewState::Submitted]);
+    $this->actingAs($admin, 'web')->post(route('approval.approve', $update), ['approved_percent' => 100]);
+
+    $this->actingAs($credential, 'measure')
+        ->get(route('measure.workspace'))
+        ->assertInertia(fn (Assert $page) => $page->where('currentStage', null));
+
+    $this->actingAs($credential, 'measure')
+        ->patch(route('measure.workspace.update'), ['action' => 'save', 'measure_status' => 'done', 'needs_decision' => false])
+        ->assertForbidden();
+});
+
+test('the workspace update route is unreachable before the stage list is confirmed', function () {
+    $measure = Measure::factory()->create();
+    MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $credential = loginAsMeasure($measure);
+
+    $this->actingAs($credential, 'measure')
+        ->patch(route('measure.workspace.update'), ['action' => 'save', 'measure_status' => 'in_progress', 'needs_decision' => false])
+        ->assertForbidden();
+});
+
+test('saving a draft updates the current stage fact fields without submitting', function () {
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $credential = loginAsMeasure($measure);
+
+    confirmStages($credential);
     $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
     $period = Period::current();
 
@@ -46,9 +211,9 @@ test('saving a draft updates the stage fact fields without submitting', function
         'measure_status' => 'in_progress',
         'risk_text' => 'Задержка поставки оборудования',
         'needs_decision' => true,
-        'stages' => [
-            ['id' => $stage->id, 'done_text' => 'Собраны данные', 'next_step' => 'Анализ', 'next_step_date' => null],
-        ],
+        'done_text' => 'Собраны данные',
+        'next_step' => 'Анализ',
+        'next_step_date' => null,
     ])->assertRedirect();
 
     $update = StagePeriodUpdate::where('measure_stage_id', $stage->id)->where('period_id', $period->id)->first();
@@ -60,49 +225,52 @@ test('saving a draft updates the stage fact fields without submitting', function
         ->and($state->needs_decision)->toBeTrue();
 });
 
-test('submitting requires the submitter name and locks the stages', function () {
+test('submitting requires the submitter name and locks the current stage', function () {
     $measure = Measure::factory()->create();
     $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
     $credential = loginAsMeasure($measure);
 
+    confirmStages($credential);
     $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
 
     $this->actingAs($credential, 'measure')->patch(route('measure.workspace.update'), [
         'action' => 'submit',
         'measure_status' => 'in_progress',
         'needs_decision' => false,
-        'stages' => [['id' => $stage->id, 'done_text' => 'Готово']],
+        'done_text' => 'Готово',
     ])->assertSessionHasErrors('submitted_by_name');
 
     $this->actingAs($credential, 'measure')->patch(route('measure.workspace.update'), [
         'action' => 'submit',
         'measure_status' => 'in_progress',
         'needs_decision' => false,
-        'submitted_by_name' => 'Иванова А.С., координатор ОП',
-        'stages' => [['id' => $stage->id, 'done_text' => 'Готово']],
+        'submitted_by_name' => 'Иванова А.С.',
+        'done_text' => 'Готово',
     ])->assertRedirect();
 
     $period = Period::current();
     $update = StagePeriodUpdate::where('measure_stage_id', $stage->id)->where('period_id', $period->id)->first();
     expect($update->review_state)->toBe(ReviewState::Submitted)
-        ->and($update->submitted_by_name)->toBe('Иванова А.С., координатор ОП')
+        ->and($update->submitted_by_name)->toBe('Иванова А.С.')
         ->and($update->submitted_via->value)->toBe('measure_session');
 
-    // Further edits are rejected while awaiting the proctor's decision.
+    // Further edits are rejected while awaiting the administrator's decision.
     $this->actingAs($credential, 'measure')->patch(route('measure.workspace.update'), [
         'action' => 'save',
         'measure_status' => 'done',
         'needs_decision' => false,
-        'stages' => [['id' => $stage->id, 'done_text' => 'Попытка изменить после подачи']],
+        'done_text' => 'Попытка изменить после подачи',
     ])->assertSessionHasErrors();
 
     expect($update->fresh()->done_text)->toBe('Готово');
 });
 
-test('a measure session can attach a link as evidence to its own stage', function () {
+test('a measure session can attach a link as evidence to its own current stage', function () {
     $measure = Measure::factory()->create();
     $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
     $credential = loginAsMeasure($measure);
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
 
     $this->actingAs($credential, 'measure')
         ->post(route('measure.workspace.evidence', $stage), [
@@ -120,6 +288,8 @@ test('a measure session can attach an uploaded file as evidence', function () {
     $measure = Measure::factory()->create();
     $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
     $credential = loginAsMeasure($measure);
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
 
     $this->actingAs($credential, 'measure')
         ->post(route('measure.workspace.evidence', $stage), [
@@ -149,6 +319,8 @@ test('office and image files are accepted as evidence', function () {
     $measure = Measure::factory()->create();
     $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
     $credential = loginAsMeasure($measure);
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
 
     foreach (['order.docx', 'plan.xlsx', 'scan.jpg', 'scan.png'] as $name) {
         $stage->evidences()->delete();
@@ -166,6 +338,8 @@ test('a disallowed file type is rejected with a validation error', function () {
     $measure = Measure::factory()->create();
     $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
     $credential = loginAsMeasure($measure);
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
 
     $this->actingAs($credential, 'measure')
         ->post(route('measure.workspace.evidence', $stage), [
