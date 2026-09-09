@@ -6,6 +6,7 @@ use App\Enums\ReviewState;
 use App\Enums\RiskLevel;
 use App\Http\Controllers\Controller;
 use App\Models\Evidence;
+use App\Models\MeasurePeriodState;
 use App\Models\StagePeriodUpdate;
 use App\Notifications\StageDecisionMade;
 use Illuminate\Http\RedirectResponse;
@@ -35,33 +36,44 @@ class ApprovalController extends Controller
             ->values();
 
         return Inertia::render('approval/index', [
-            'updates' => $updates->map(fn (StagePeriodUpdate $u) => [
-                'id' => $u->id,
-                'review_state' => $u->review_state->value,
-                'done_text' => $u->done_text,
-                'next_step' => $u->next_step,
-                'next_step_date' => $u->next_step_date?->format('Y-m-d'),
-                'submitted_by_name' => $u->submitted_by_name,
-                'submitted_at' => $u->submitted_at?->format('Y-m-d H:i'),
-                'period' => $u->period->month->format('Y-m'),
-                'stage' => [
-                    'id' => $u->stage->id,
-                    'title' => $u->stage->title,
-                    'planned_date' => $u->stage->planned_date?->format('Y-m-d'),
-                    'weight' => $u->stage->weight,
-                ],
-                'measure' => [
-                    'number' => $u->stage->measure->number,
-                    'title' => $u->stage->measure->title,
-                    'direction' => $u->stage->measure->direction?->name,
-                    'deadline' => $u->stage->measure->deadline?->format('Y-m-d'),
-                    'risk_level' => $u->stage->measure->risk_level?->value,
-                ],
-                'evidences' => Evidence::where('measure_stage_id', $u->stage->id)
+            'updates' => $updates->map(function (StagePeriodUpdate $u) {
+                $periodState = MeasurePeriodState::where('measure_id', $u->stage->measure_id)
                     ->where('period_id', $u->period_id)
-                    ->get()
-                    ->map(fn ($e) => ['id' => $e->id, 'title' => $e->title, 'path_or_url' => $e->path_or_url, 'type' => $e->type->value]),
-            ]),
+                    ->first();
+
+                return [
+                    'id' => $u->id,
+                    'review_state' => $u->review_state->value,
+                    'done_text' => $u->done_text,
+                    'next_step' => $u->next_step,
+                    'next_step_date' => $u->next_step_date?->format('Y-m-d'),
+                    'submitted_by_name' => $u->submitted_by_name,
+                    'submitted_at' => $u->submitted_at?->format('Y-m-d H:i'),
+                    'period' => $u->period->month->format('Y-m'),
+                    'stage' => [
+                        'id' => $u->stage->id,
+                        'title' => $u->stage->title,
+                        'planned_date' => $u->stage->planned_date?->format('Y-m-d'),
+                        'weight' => $u->stage->weight,
+                    ],
+                    'measure' => [
+                        'number' => $u->stage->measure->number,
+                        'title' => $u->stage->measure->title,
+                        'direction' => $u->stage->measure->direction?->name,
+                        'deadline' => $u->stage->measure->deadline?->format('Y-m-d'),
+                        'risk_level' => $u->stage->measure->risk_level?->value,
+                    ],
+                    // Текст риска/проблемы, который исполнитель вписал вместе с этим отчётом
+                    // за этот же период ([[Функциональные требования#4.7 Рабочее место мероприятия]])
+                    // — без него администратор видел только цвет светофора, но не причину.
+                    'risk_text' => $periodState?->risk_text,
+                    'needs_decision' => (bool) $periodState?->needs_decision,
+                    'evidences' => Evidence::where('measure_stage_id', $u->stage->id)
+                        ->where('period_id', $u->period_id)
+                        ->get()
+                        ->map(fn ($e) => ['id' => $e->id, 'title' => $e->title, 'path_or_url' => $e->path_or_url, 'type' => $e->type->value]),
+                ];
+            }),
         ]);
     }
 

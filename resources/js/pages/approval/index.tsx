@@ -26,6 +26,8 @@ interface QueueItem {
     period: string;
     stage: { id: number; title: string; planned_date: string | null; weight: number };
     measure: { number: number; title: string; direction: string | null; deadline: string | null; risk_level: string | null };
+    risk_text: string | null;
+    needs_decision: boolean;
     evidences: Evidence[];
 }
 
@@ -91,7 +93,11 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                                 </Badge>
                             </div>
                             <p className="text-muted-foreground">{u.stage.title}</p>
-                            {u.measure.risk_level === 'high' && <Badge variant="destructive">Высокий риск</Badge>}
+                            <div className="mt-1 flex flex-wrap gap-1">
+                                {u.measure.risk_level === 'high' && <Badge variant="destructive">Высокий риск</Badge>}
+                                {u.needs_decision && <Badge variant="destructive">Нужно решение</Badge>}
+                            </div>
+                            {u.risk_text && <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">Риск: {u.risk_text}</p>}
                         </button>
                     ))}
                 </div>
@@ -105,10 +111,21 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                             <h2 className="text-lg font-medium">{selected.measure.title}</h2>
                             <p className="text-muted-foreground text-sm">
                                 Этап: {selected.stage.title} (вес {selected.stage.weight}%, плановая дата{' '}
-                                {selected.stage.planned_date ?? '—'}) · Срок мероприятия: {selected.measure.deadline ?? '—'} · Риск:{' '}
+                                {selected.stage.planned_date ?? '—'}) · Срок мероприятия: {selected.measure.deadline ?? '—'} · Уровень риска:{' '}
                                 {selected.measure.risk_level ? RISK_LABELS[selected.measure.risk_level] : '—'}
                             </p>
                         </div>
+
+                        {(selected.risk_text || selected.needs_decision) && (
+                            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                                {selected.risk_text && (
+                                    <p>
+                                        <strong>Риск / проблема:</strong> {selected.risk_text}
+                                    </p>
+                                )}
+                                {selected.needs_decision && <p className="mt-1 font-medium">Требуется решение руководства</p>}
+                            </div>
+                        )}
 
                         <div className="grid gap-2 text-sm">
                             <p>

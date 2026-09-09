@@ -5,11 +5,13 @@ use App\Enums\ReviewState;
 use App\Enums\RiskLevel;
 use App\Models\Evidence;
 use App\Models\Measure;
+use App\Models\MeasurePeriodState;
 use App\Models\MeasureStage;
 use App\Models\Period;
 use App\Models\StagePeriodUpdate;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
@@ -39,6 +41,29 @@ test('an observer cannot view or act on the approval queue', function () {
     $this->actingAs($this->observer)
         ->post(route('approval.approve', $update), ['approved_percent' => 50])
         ->assertForbidden();
+});
+
+test('the queue shows the risk text and needs-decision flag the executor entered for that period', function () {
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $period = Period::factory()->create();
+    StagePeriodUpdate::factory()->create([
+        'measure_stage_id' => $stage->id,
+        'period_id' => $period->id,
+        'review_state' => ReviewState::Submitted,
+    ]);
+    MeasurePeriodState::factory()->create([
+        'measure_id' => $measure->id,
+        'period_id' => $period->id,
+        'risk_text' => 'Не хватает данных от подразделения',
+        'needs_decision' => true,
+    ]);
+
+    $this->actingAs($this->administrator)
+        ->get(route('approval.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('updates.0.risk_text', 'Не хватает данных от подразделения')
+            ->where('updates.0.needs_decision', true));
 });
 
 test('the administrator cannot approve 100 percent without an attached document', function () {
