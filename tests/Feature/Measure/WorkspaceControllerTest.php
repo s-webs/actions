@@ -212,8 +212,6 @@ test('saving a draft updates the current stage fact fields without submitting', 
         'risk_text' => 'Задержка поставки оборудования',
         'needs_decision' => true,
         'done_text' => 'Собраны данные',
-        'next_step' => 'Анализ',
-        'next_step_date' => null,
     ])->assertRedirect();
 
     $update = StagePeriodUpdate::where('measure_stage_id', $stage->id)->where('period_id', $period->id)->first();

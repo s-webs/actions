@@ -24,8 +24,6 @@ interface StageEvidence {
 interface StageUpdate {
     id: number;
     done_text: string | null;
-    next_step: string | null;
-    next_step_date: string | null;
     review_state: ReviewState;
     review_comment: string | null;
     approved_percent: number | null;
@@ -412,8 +410,6 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
         needs_decision: measureState.needs_decision,
         submitted_by_name: '',
         done_text: currentStage?.update?.done_text ?? '',
-        next_step: currentStage?.update?.next_step ?? '',
-        next_step_date: currentStage?.update?.next_step_date ?? '',
     });
 
     const locked = measureState.locked;
@@ -537,26 +533,6 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                             onChange={(e) => setData('done_text', e.target.value)}
                                             disabled={locked}
                                         />
-                                    </div>
-
-                                    <div className="grid gap-2 sm:grid-cols-2">
-                                        <div className="grid gap-2">
-                                            <Label>Следующий шаг</Label>
-                                            <Textarea
-                                                value={data.next_step}
-                                                onChange={(e) => setData('next_step', e.target.value)}
-                                                disabled={locked}
-                                            />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label>Срок следующего шага</Label>
-                                            <Input
-                                                type="date"
-                                                value={data.next_step_date}
-                                                onChange={(e) => setData('next_step_date', e.target.value)}
-                                                disabled={locked}
-                                            />
-                                        </div>
                                     </div>
 
                                     <div className="flex flex-col gap-2">

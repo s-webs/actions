@@ -19,8 +19,6 @@ interface QueueItem {
     id: number;
     review_state: 'submitted' | 'rework';
     done_text: string | null;
-    next_step: string | null;
-    next_step_date: string | null;
     submitted_by_name: string | null;
     submitted_at: string | null;
     period: string;
@@ -130,9 +128,6 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                         <div className="grid gap-2 text-sm">
                             <p>
                                 <strong>Что сделано:</strong> {selected.done_text ?? '—'}
-                            </p>
-                            <p>
-                                <strong>Следующий шаг:</strong> {selected.next_step ?? '—'} ({selected.next_step_date ?? '—'})
                             </p>
                             <p>
                                 <strong>Подал:</strong> {selected.submitted_by_name ?? '—'} · {selected.submitted_at ?? '—'}

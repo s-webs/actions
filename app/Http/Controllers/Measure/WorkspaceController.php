@@ -139,8 +139,6 @@ class WorkspaceController extends Controller
             'update' => optional($update, fn (StagePeriodUpdate $u) => [
                 'id' => $u->id,
                 'done_text' => $u->done_text,
-                'next_step' => $u->next_step,
-                'next_step_date' => $u->next_step_date?->format('Y-m-d'),
                 'review_state' => $u->review_state->value,
                 'review_comment' => $u->review_comment,
                 'approved_percent' => $u->approved_percent,
@@ -214,8 +212,6 @@ class WorkspaceController extends Controller
             'risk_text' => ['nullable', 'string'],
             'needs_decision' => ['boolean'],
             'done_text' => ['nullable', 'string'],
-            'next_step' => ['nullable', 'string'],
-            'next_step_date' => ['nullable', 'date'],
         ];
 
         if ($isSubmit) {
@@ -241,8 +237,6 @@ class WorkspaceController extends Controller
         if ($update && in_array($update->review_state, [ReviewState::Draft, ReviewState::Rework], true)) {
             $update->update([
                 'done_text' => $data['done_text'] ?? null,
-                'next_step' => $data['next_step'] ?? null,
-                'next_step_date' => $data['next_step_date'] ?? null,
                 ...($isSubmit ? [
                     'review_state' => ReviewState::Submitted,
                     'submitted_via' => SubmittedVia::MeasureSession,

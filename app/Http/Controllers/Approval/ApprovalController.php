@@ -45,8 +45,6 @@ class ApprovalController extends Controller
                     'id' => $u->id,
                     'review_state' => $u->review_state->value,
                     'done_text' => $u->done_text,
-                    'next_step' => $u->next_step,
-                    'next_step_date' => $u->next_step_date?->format('Y-m-d'),
                     'submitted_by_name' => $u->submitted_by_name,
                     'submitted_at' => $u->submitted_at?->format('Y-m-d H:i'),
                     'period' => $u->period->month->format('Y-m'),
