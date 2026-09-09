@@ -212,6 +212,12 @@ class WorkspaceController extends Controller
             'risk_text' => ['nullable', 'string'],
             'needs_decision' => ['boolean'],
             'done_text' => ['nullable', 'string'],
+            'files' => ['nullable', 'array', 'max:20'],
+            'files.*' => [
+                'file', 'max:25600',
+                'mimes:doc,docx,pdf,xls,xlsx,jpg,jpeg,png,gif,bmp,webp,svg,tif,tiff,heic,heif',
+            ],
+            'evidence_url' => ['nullable', 'url'],
         ];
 
         if ($isSubmit) {
@@ -245,35 +251,22 @@ class WorkspaceController extends Controller
                     'submitted_at' => now(),
                 ] : []),
             ]);
+
+            $this->attachEvidence($request, $measure, $currentStage, $period);
         }
 
         return back()->with('status', $isSubmit ? 'Отправлено на проверку.' : 'Черновик сохранён.');
     }
 
-    public function storeEvidence(Request $request, MeasureStage $stage): RedirectResponse
+    /**
+     * Прикрепление документов теперь часть общей формы этапа, а не отдельное
+     * действие со своей кнопкой (по опыту реального использования — два отдельных
+     * submit'а на одном экране легко перепутать: файлы выбирали, но забывали
+     * нажать «Прикрепить» отдельно от «Отправить на проверку»). Файлы и/или ссылка
+     * уходят вместе с «Сохранить черновик» / «Отправить на проверку» одним кликом.
+     */
+    private function attachEvidence(Request $request, Measure $measure, MeasureStage $stage, Period $period): void
     {
-        $measure = $this->currentMeasure();
-
-        if ($stage->measure_id !== $measure->id) {
-            abort(403);
-        }
-
-        if (! $measure->stagesConfirmed() || $measure->currentStage()?->id !== $stage->id) {
-            abort(403, 'Документы можно прикреплять только к текущему этапу.');
-        }
-
-        $period = Period::current();
-
-        $data = $request->validate([
-            'title' => ['nullable', 'string', 'max:255'],
-            'files' => ['required_without:url', 'nullable', 'array', 'max:20'],
-            'files.*' => [
-                'file', 'max:25600',
-                'mimes:doc,docx,pdf,xls,xlsx,jpg,jpeg,png,gif,bmp,webp,svg,tif,tiff,heic,heif',
-            ],
-            'url' => ['required_without:files', 'nullable', 'url'],
-        ]);
-
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $file) {
                 $stage->evidences()->create([
@@ -281,22 +274,20 @@ class WorkspaceController extends Controller
                     'period_id' => $period->id,
                     'type' => EvidenceType::File,
                     'path_or_url' => $file->store('evidence/'.$measure->id, 'public'),
-                    'title' => $data['title'] ?? null,
                     'uploaded_via' => SubmittedVia::MeasureSession,
                 ]);
             }
-        } else {
+        }
+
+        if ($request->filled('evidence_url')) {
             $stage->evidences()->create([
                 'measure_id' => $measure->id,
                 'period_id' => $period->id,
                 'type' => EvidenceType::Link,
-                'path_or_url' => $data['url'],
-                'title' => $data['title'] ?? null,
+                'path_or_url' => $request->string('evidence_url')->toString(),
                 'uploaded_via' => SubmittedVia::MeasureSession,
             ]);
         }
-
-        return back()->with('status', 'Документ добавлен.');
     }
 
     /**

@@ -29,8 +29,6 @@ Route::get('measure/link-login/{token}', [MeasureAuthenticatedSessionController:
 Route::middleware('auth:measure')->group(function () {
     Route::get('measure/workspace', [WorkspaceController::class, 'show'])->name('measure.workspace');
     Route::patch('measure/workspace', [WorkspaceController::class, 'update'])->name('measure.workspace.update');
-    Route::post('measure/workspace/stages/{stage}/evidence', [WorkspaceController::class, 'storeEvidence'])
-        ->name('measure.workspace.evidence');
 
     Route::post('measure/stages', [WorkspaceController::class, 'storeStage'])->name('measure.stages.store');
     Route::patch('measure/stages/{stage}', [WorkspaceController::class, 'updateStage'])->name('measure.stages.update');

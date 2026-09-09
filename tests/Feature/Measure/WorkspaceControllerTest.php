@@ -113,11 +113,6 @@ test('the second stage stays locked and unreachable until the first is approved'
         ->assertInertia(fn (Assert $page) => $page
             ->where('currentStage.id', $first->id)
             ->where('stageList.1.status', 'locked'));
-
-    // Directly posting evidence to the locked stage is rejected, not just hidden in the UI.
-    $this->actingAs($credential, 'measure')
-        ->post(route('measure.workspace.evidence', $second), ['url' => 'https://example.test/x.pdf'])
-        ->assertForbidden();
 });
 
 test('approving the current stage opens the next one', function () {
@@ -263,7 +258,16 @@ test('submitting requires the submitter name and locks the current stage', funct
     expect($update->fresh()->done_text)->toBe('Готово');
 });
 
-test('a measure session can attach a link as evidence to its own current stage', function () {
+function draftPayload(array $overrides = []): array
+{
+    return array_merge([
+        'action' => 'save',
+        'measure_status' => 'in_progress',
+        'needs_decision' => false,
+    ], $overrides);
+}
+
+test('a measure session can attach a link as evidence to its own current stage, in the same request as the report', function () {
     $measure = Measure::factory()->create();
     $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
     $credential = loginAsMeasure($measure);
@@ -271,13 +275,10 @@ test('a measure session can attach a link as evidence to its own current stage',
     $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
 
     $this->actingAs($credential, 'measure')
-        ->post(route('measure.workspace.evidence', $stage), [
-            'url' => 'https://example.test/order.pdf',
-            'title' => 'Приказ №12',
-        ])
+        ->patch(route('measure.workspace.update'), draftPayload(['evidence_url' => 'https://example.test/order.pdf']))
         ->assertRedirect();
 
-    expect($stage->evidences()->where('title', 'Приказ №12')->exists())->toBeTrue();
+    expect($stage->evidences()->where('path_or_url', 'https://example.test/order.pdf')->exists())->toBeTrue();
 });
 
 test('a measure session can attach an uploaded file as evidence', function () {
@@ -290,9 +291,7 @@ test('a measure session can attach an uploaded file as evidence', function () {
     $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
 
     $this->actingAs($credential, 'measure')
-        ->post(route('measure.workspace.evidence', $stage), [
-            'files' => [UploadedFile::fake()->create('order.pdf', 100)],
-        ])
+        ->patch(route('measure.workspace.update'), draftPayload(['files' => [UploadedFile::fake()->create('order.pdf', 100)]]))
         ->assertRedirect();
 
     $evidence = $stage->evidences()->first();
@@ -310,29 +309,18 @@ test('a measure session can attach several files at once', function () {
     $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
 
     $this->actingAs($credential, 'measure')
-        ->post(route('measure.workspace.evidence', $stage), [
+        ->patch(route('measure.workspace.update'), draftPayload([
             'files' => [
                 UploadedFile::fake()->create('order.pdf', 100),
                 UploadedFile::fake()->create('scan.jpg', 100),
                 UploadedFile::fake()->create('report.docx', 100),
             ],
-        ])
+        ]))
         ->assertRedirect()
         ->assertSessionDoesntHaveErrors();
 
     expect($stage->evidences()->count())->toBe(3);
     $stage->evidences->each(fn ($e) => Storage::disk('public')->assertExists($e->path_or_url));
-});
-
-test('a measure session cannot attach evidence to a stage of a different measure', function () {
-    $ownMeasure = Measure::factory()->create();
-    $otherMeasure = Measure::factory()->create();
-    $otherStage = MeasureStage::factory()->create(['measure_id' => $otherMeasure->id]);
-    $credential = loginAsMeasure($ownMeasure);
-
-    $this->actingAs($credential, 'measure')
-        ->post(route('measure.workspace.evidence', $otherStage), ['url' => 'https://example.test/x.pdf'])
-        ->assertForbidden();
 });
 
 test('office and image files are accepted as evidence', function () {
@@ -348,7 +336,7 @@ test('office and image files are accepted as evidence', function () {
         $stage->evidences()->delete();
 
         $this->actingAs($credential, 'measure')
-            ->post(route('measure.workspace.evidence', $stage), ['files' => [UploadedFile::fake()->create($name, 100)]])
+            ->patch(route('measure.workspace.update'), draftPayload(['files' => [UploadedFile::fake()->create($name, 100)]]))
             ->assertRedirect()
             ->assertSessionDoesntHaveErrors();
     }
@@ -364,9 +352,9 @@ test('a disallowed file type is rejected with a validation error', function () {
     $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
 
     $this->actingAs($credential, 'measure')
-        ->post(route('measure.workspace.evidence', $stage), [
+        ->patch(route('measure.workspace.update'), draftPayload([
             'files' => [UploadedFile::fake()->create('script.exe', 10, 'application/x-msdownload')],
-        ])
+        ]))
         ->assertSessionHasErrors('files.0');
 
     expect($stage->evidences()->count())->toBe(0);

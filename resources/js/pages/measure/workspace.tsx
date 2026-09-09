@@ -352,56 +352,6 @@ function StageSidebar({ stages }: { stages: StageListItem[] }) {
     );
 }
 
-function EvidenceUploader({ stageId }: { stageId: number }) {
-    const [files, setFiles] = useState<File[]>([]);
-    const [url, setUrl] = useState('');
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    function submit(e: FormEvent) {
-        e.preventDefault();
-        setBusy(true);
-        setError(null);
-        const form = new FormData();
-        files.forEach((file) => form.append('files[]', file));
-        if (url) form.append('url', url);
-
-        router.post(route('measure.workspace.evidence', stageId), form, {
-            forceFormData: true,
-            preserveScroll: true,
-            onError: (errors) => setError(errors.files ?? errors.url ?? 'Не удалось прикрепить документ(ы).'),
-            onSuccess: () => {
-                setFiles([]);
-                setUrl('');
-            },
-            onFinish: () => setBusy(false),
-        });
-    }
-
-    return (
-        <div className="flex flex-col gap-1">
-            <form onSubmit={submit} className="flex flex-wrap items-center gap-2 text-sm">
-                <Input
-                    type="file"
-                    multiple
-                    accept={ACCEPTED_FILE_EXTENSIONS}
-                    className="w-56"
-                    onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-                />
-                <span className="text-muted-foreground">или</span>
-                <Input type="url" placeholder="ссылка на документ" className="w-56" value={url} onChange={(e) => setUrl(e.target.value)} />
-                <Button type="submit" size="sm" variant="secondary" disabled={busy || (files.length === 0 && !url)}>
-                    Прикрепить{files.length > 1 ? ` (${files.length})` : ''}
-                </Button>
-            </form>
-            <p className="text-muted-foreground text-xs">
-                Word, Excel, PDF или изображение, до 25 МБ каждый — можно выбрать сразу несколько файлов.
-            </p>
-            {error && <p className="text-destructive text-xs">{error}</p>}
-        </div>
-    );
-}
-
 /**
  * Рабочее место мероприятия (guard `measure`) — task-007, task-020
  * (последовательное заполнение), [[Функциональные требования#4.7 Рабочее место мероприятия]].
@@ -413,20 +363,26 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
         needs_decision: measureState.needs_decision,
         submitted_by_name: '',
         done_text: currentStage?.update?.done_text ?? '',
+        files: [] as File[],
+        evidence_url: '',
     });
 
     const locked = measureState.locked;
 
+    function clearEvidenceFields() {
+        setData((prev) => ({ ...prev, files: [], evidence_url: '' }));
+    }
+
     function save(e: FormEvent) {
         e.preventDefault();
         transform((data) => ({ ...data, action: 'save' }));
-        patch(route('measure.workspace.update'));
+        patch(route('measure.workspace.update'), { onSuccess: clearEvidenceFields });
     }
 
     function submit(e: FormEvent) {
         e.preventDefault();
         transform((data) => ({ ...data, action: 'submit' }));
-        patch(route('measure.workspace.update'));
+        patch(route('measure.workspace.update'), { onSuccess: clearEvidenceFields });
     }
 
     const reviewState = currentStage?.update?.review_state ?? 'draft';
@@ -556,7 +512,38 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                                 ))}
                                             </ul>
                                         )}
-                                        {!locked && <EvidenceUploader stageId={currentStage.id} />}
+                                        {!locked && (
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex flex-wrap items-center gap-2 text-sm">
+                                                    <Input
+                                                        type="file"
+                                                        multiple
+                                                        accept={ACCEPTED_FILE_EXTENSIONS}
+                                                        className="w-56"
+                                                        onChange={(e) => setData('files', Array.from(e.target.files ?? []))}
+                                                    />
+                                                    <span className="text-muted-foreground">или</span>
+                                                    <Input
+                                                        type="url"
+                                                        placeholder="ссылка на документ"
+                                                        className="w-56"
+                                                        value={data.evidence_url}
+                                                        onChange={(e) => setData('evidence_url', e.target.value)}
+                                                    />
+                                                </div>
+                                                <p className="text-muted-foreground text-xs">
+                                                    Word, Excel, PDF или изображение, до 25 МБ каждый — можно выбрать сразу несколько
+                                                    файлов. Уйдут вместе с «Сохранить черновик» / «Отправить на проверку», отдельно
+                                                    нажимать ничего не нужно.
+                                                </p>
+                                                {(errors.files || errors.evidence_url) && (
+                                                    <p className="text-destructive text-xs">{errors.files ?? errors.evidence_url}</p>
+                                                )}
+                                                {data.files.length > 0 && (
+                                                    <p className="text-xs">Выбрано файлов: {data.files.length}</p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </section>
 
