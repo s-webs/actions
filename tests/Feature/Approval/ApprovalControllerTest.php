@@ -140,6 +140,16 @@ test('a rejected or reworked stage keeps its last approved percent sticky', func
         ->and($measure->fresh()->percent)->toBe(60);
 });
 
+test('the missing-comment error is a real Russian message, not a raw translation key', function () {
+    $update = submittedUpdate();
+
+    $this->actingAs($this->administrator)->post(route('approval.rework', $update));
+
+    expect(session('errors')->get('review_comment')[0])
+        ->not->toBe('validation.required')
+        ->and(session('errors')->get('review_comment')[0])->toContain('обязательно');
+});
+
 test('rejecting requires a comment and does not change the approved percent', function () {
     $update = submittedUpdate();
 
