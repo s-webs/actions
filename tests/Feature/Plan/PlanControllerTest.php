@@ -97,6 +97,29 @@ test('the risk level filter uses the computed risk', function () {
             ->where('measures.data.0.number', 1));
 });
 
+test('the search filter matches a measure by title', function () {
+    Measure::factory()->create(['number' => 1, 'title' => 'Внедрение системы антиплагиата']);
+    Measure::factory()->create(['number' => 2, 'title' => 'Обновление сайта']);
+
+    $this->actingAs($this->administrator)
+        ->get(route('plan.index', ['search' => 'антиплагиата']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('measures.data', fn ($data) => count($data) === 1)
+            ->where('measures.data.0.number', 1)
+            ->where('filters.search', 'антиплагиата'));
+});
+
+test('the search filter matches a measure by number', function () {
+    Measure::factory()->create(['number' => 12, 'title' => 'Первое мероприятие']);
+    Measure::factory()->create(['number' => 3, 'title' => 'Второе мероприятие']);
+
+    $this->actingAs($this->administrator)
+        ->get(route('plan.index', ['search' => '12']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('measures.data', fn ($data) => count($data) === 1)
+            ->where('measures.data.0.number', 12));
+});
+
 test('the responsible name filter narrows the registry', function () {
     $matching = Responsible::factory()->create(['name' => 'Проректор по АР']);
     $other = Responsible::factory()->create(['name' => 'Декан']);

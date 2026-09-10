@@ -1,6 +1,6 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useRef, useState } from 'react';
 
 import { StageDetailCard } from '@/components/stage-detail-card';
 import type { StageDetail, StageDetailEvidence, StageDetailUpdate } from '@/components/stage-detail-card';
@@ -272,19 +272,43 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
     const [expanded, setExpanded] = useState<number | null>(null);
     const [search, setSearch] = useState(filters.search ?? '');
     const [responsible, setResponsible] = useState(filters.responsible ?? '');
+    const applyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { measureStatus, riskLevel } = useLabels();
 
-    function apply(next: Record<string, string | boolean | undefined>) {
+    function apply(overrides: Record<string, string | boolean | undefined> = {}) {
+        if (applyTimer.current) {
+            clearTimeout(applyTimer.current);
+            applyTimer.current = null;
+        }
+
+        const params = {
+            ...filters,
+            search: search.trim() || undefined,
+            responsible: responsible.trim() || undefined,
+            ...overrides,
+        };
+
         router.get(
             route('plan.index'),
-            { ...filters, ...next },
+            Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== '')),
             { preserveState: true, preserveScroll: true, replace: true },
         );
     }
 
+    function queueApply(overrides: Record<string, string | boolean | undefined>) {
+        if (applyTimer.current) {
+            clearTimeout(applyTimer.current);
+        }
+
+        applyTimer.current = setTimeout(() => apply(overrides), 350);
+    }
+
     function submitSearch(e: FormEvent) {
         e.preventDefault();
-        apply({ search, responsible: responsible || undefined });
+        apply({
+            search: search.trim() || undefined,
+            responsible: responsible.trim() || undefined,
+        });
     }
 
     return (
@@ -316,10 +340,15 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
                         <Label htmlFor="search">Поиск</Label>
                         <Input
                             id="search"
+                            type="search"
                             className="w-56"
                             placeholder="№ или текст мероприятия"
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                setSearch(value);
+                                queueApply({ search: value.trim() || undefined });
+                            }}
                         />
                     </div>
 
@@ -350,7 +379,11 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
                             className="w-56"
                             placeholder="Имя ответственного"
                             value={responsible}
-                            onChange={(e) => setResponsible(e.target.value)}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                setResponsible(value);
+                                queueApply({ responsible: value.trim() || undefined });
+                            }}
                         />
                     </div>
 
@@ -406,6 +439,10 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
                         />
                         Есть этапы на проверку
                     </label>
+
+                    <Button type="submit" size="sm">
+                        Найти
+                    </Button>
                 </form>
 
                 <div className="overflow-x-auto rounded-lg border">

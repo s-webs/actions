@@ -71,9 +71,17 @@ class PlanController extends Controller
     {
         $query
             ->when($request->filled('search'), function ($q) use ($request) {
-                $search = $request->string('search');
-                $q->where(fn ($q) => $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('number', 'like', "%{$search}%"));
+                $term = trim($request->string('search')->toString());
+                if ($term === '') {
+                    return;
+                }
+
+                $q->where(function ($q) use ($term) {
+                    $q->where('title', 'like', '%'.$term.'%');
+                    if (ctype_digit($term)) {
+                        $q->orWhere('number', (int) $term);
+                    }
+                });
             })
             ->when($request->filled('direction_id'), fn ($q) => $q->where('direction_id', $request->integer('direction_id')))
             ->when($request->filled('responsible'), function ($q) use ($request) {
