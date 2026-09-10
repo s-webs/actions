@@ -21,11 +21,11 @@ class DatabaseSeeder extends Seeder
             ResponsibleSeeder::class,
         ]);
 
-        // User::factory(10)->create();
+        $user = User::firstOrCreate(
+            ['email' => 'test@example.com'],
+            ['name' => 'Test User', 'password' => 'password'],
+        );
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        $user->assignRole('administrator');
     }
 }

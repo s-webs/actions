@@ -66,6 +66,7 @@ class PlanController extends Controller
             'statuses' => collect(MeasureStatus::cases())->map->value,
             'canManageStages' => Auth::user()->can('manage', Measure::class),
             'canCreate' => Auth::user()->can('create', Measure::class),
+            'canImport' => Auth::user()->can('import', Measure::class),
             'isDeveloper' => Auth::user()->hasRole('developer'),
         ]);
     }

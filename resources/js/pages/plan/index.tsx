@@ -54,6 +54,7 @@ interface PlanIndexProps {
     statuses: MeasureStatus[];
     canManageStages: boolean;
     canCreate: boolean;
+    canImport: boolean;
     isDeveloper: boolean;
 }
 
@@ -230,7 +231,7 @@ function StageManager({
     );
 }
 
-export default function PlanIndex({ measures, filters, directions, statuses, canManageStages, canCreate, isDeveloper }: PlanIndexProps) {
+export default function PlanIndex({ measures, filters, directions, statuses, canManageStages, canCreate, canImport, isDeveloper }: PlanIndexProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [search, setSearch] = useState(filters.search ?? '');
     const [responsible, setResponsible] = useState(filters.responsible ?? '');
@@ -265,9 +266,11 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
                         <a href={route('reports.plan-xlsx')} className="text-sm text-primary underline-offset-4 hover:underline">
                             Экспорт в xlsx
                         </a>
-                        <Link href={route('plan.import')} className="text-sm text-primary underline-offset-4 hover:underline">
-                            Импортировать из Excel
-                        </Link>
+                        {canImport && (
+                            <Link href={route('plan.import')} className="text-sm text-primary underline-offset-4 hover:underline">
+                                Импортировать из Excel
+                            </Link>
+                        )}
                     </div>
                 </div>
 

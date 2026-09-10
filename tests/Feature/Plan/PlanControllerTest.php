@@ -23,6 +23,25 @@ test('a measure-guard session cannot reach the plan registry', function () {
     $this->get(route('plan.index'))->assertRedirect(route('login'));
 });
 
+test('an administrator receives the import permission on the plan page', function () {
+    $this->actingAs($this->administrator)
+        ->get(route('plan.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('canImport', true)
+            ->where('canCreate', true));
+});
+
+test('an observer does not receive the import permission on the plan page', function () {
+    $observer = User::factory()->create();
+    $observer->assignRole('observer');
+
+    $this->actingAs($observer)
+        ->get(route('plan.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('canImport', false)
+            ->where('canCreate', false));
+});
+
 test('a measure with no period state shows as not started by default', function () {
     Measure::factory()->create(['number' => 1]);
 
