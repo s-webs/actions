@@ -120,6 +120,17 @@ test('the search filter matches a measure by number', function () {
             ->where('measures.data.0.number', 12));
 });
 
+test('the search filter matches a title regardless of case', function () {
+    Measure::factory()->create(['number' => 1, 'title' => 'Внедрение системы антиплагиата']);
+    Measure::factory()->create(['number' => 2, 'title' => 'Обновление сайта']);
+
+    $this->actingAs($this->administrator)
+        ->get(route('plan.index', ['search' => 'АНТИПЛАГИАТА']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('measures.data', fn ($data) => count($data) === 1)
+            ->where('measures.data.0.number', 1));
+});
+
 test('the responsible name filter narrows the registry', function () {
     $matching = Responsible::factory()->create(['name' => 'Проректор по АР']);
     $other = Responsible::factory()->create(['name' => 'Декан']);
@@ -128,7 +139,7 @@ test('the responsible name filter narrows the registry', function () {
     Measure::factory()->create(['number' => 2, 'responsible_id' => $other->id]);
 
     $this->actingAs($this->administrator)
-        ->get(route('plan.index', ['responsible' => 'Проректор']))
+        ->get(route('plan.index', ['responsible' => 'проректор']))
         ->assertInertia(fn (Assert $page) => $page
             ->where('measures.data', fn ($data) => count($data) === 1)
             ->where('measures.data.0.number', 1));

@@ -9,6 +9,7 @@ use App\Models\Direction;
 use App\Models\Evidence;
 use App\Models\Measure;
 use App\Models\MeasureStage;
+use App\Models\Responsible;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -76,17 +77,27 @@ class PlanController extends Controller
                     return;
                 }
 
-                $q->where(function ($q) use ($term) {
-                    $q->where('title', 'like', '%'.$term.'%');
-                    if (ctype_digit($term)) {
-                        $q->orWhere('number', (int) $term);
-                    }
-                });
+                $ids = (clone $q)
+                    ->setEagerLoads([])
+                    ->get(['id', 'title', 'number'])
+                    ->filter(fn (Measure $measure) => $this->matchesSearch($measure, $term))
+                    ->pluck('id');
+
+                $q->whereIn('id', $ids->isEmpty() ? [0] : $ids->all());
             })
             ->when($request->filled('direction_id'), fn ($q) => $q->where('direction_id', $request->integer('direction_id')))
             ->when($request->filled('responsible'), function ($q) use ($request) {
-                $name = $request->string('responsible')->toString();
-                $q->whereHas('responsible', fn ($q) => $q->where('name', 'like', "%{$name}%"));
+                $name = trim($request->string('responsible')->toString());
+                if ($name === '') {
+                    return;
+                }
+
+                $ids = Responsible::query()
+                    ->get(['id', 'name'])
+                    ->filter(fn (Responsible $responsible) => $this->containsInsensitive($responsible->name, $name))
+                    ->pluck('id');
+
+                $q->whereIn('responsible_id', $ids->isEmpty() ? [0] : $ids->all());
             })
             ->when($request->filled('deadline_from'), fn ($q) => $q->whereDate('deadline', '>=', $request->string('deadline_from')))
             ->when($request->filled('deadline_to'), fn ($q) => $q->whereDate('deadline', '<=', $request->string('deadline_to')))
@@ -100,6 +111,20 @@ class PlanController extends Controller
             });
 
         $this->applyComputedStatusAndRiskFilters($query, $request);
+    }
+
+    private function matchesSearch(Measure $measure, string $term): bool
+    {
+        if ($this->containsInsensitive($measure->title, $term)) {
+            return true;
+        }
+
+        return ctype_digit($term) && (int) $measure->number === (int) $term;
+    }
+
+    private function containsInsensitive(string $haystack, string $needle): bool
+    {
+        return mb_stripos($haystack, $needle, 0, 'UTF-8') !== false;
     }
 
     /**
