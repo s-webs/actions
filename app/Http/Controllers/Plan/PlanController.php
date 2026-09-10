@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Plan;
 
-use App\Enums\EvidenceType;
 use App\Enums\MeasureStatus;
 use App\Enums\ReviewState;
 use App\Http\Controllers\Controller;
@@ -14,7 +13,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -182,7 +180,7 @@ class PlanController extends Controller
             'id' => $e->id,
             'title' => $e->title,
             'type' => $e->type->value,
-            'path_or_url' => $e->type === EvidenceType::Link ? $e->path_or_url : Storage::disk('public')->url($e->path_or_url),
+            'path_or_url' => $e->publicUrl(),
         ]);
     }
 }

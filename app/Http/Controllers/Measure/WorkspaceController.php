@@ -21,7 +21,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -200,7 +199,7 @@ class WorkspaceController extends Controller
             'id' => $e->id,
             'title' => $e->title,
             'type' => $e->type->value,
-            'path_or_url' => $e->type === EvidenceType::Link ? $e->path_or_url : Storage::disk('public')->url($e->path_or_url),
+            'path_or_url' => $e->publicUrl(),
         ]);
     }
 

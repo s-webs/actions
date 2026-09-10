@@ -12,6 +12,7 @@ use App\Models\MeasureCredential;
 use App\Models\MeasureStage;
 use App\Models\Period;
 use App\Models\StagePeriodUpdate;
+use Illuminate\Support\Facades\Storage;
 
 test('measure belongs to a direction and casts risk level to an enum', function () {
     $direction = Direction::factory()->create(['name' => 'Академическая честность']);
@@ -60,7 +61,8 @@ test('evidence attaches to a measure and casts its type', function () {
     ]);
 
     expect($measure->evidences->first()->is($evidence))->toBeTrue()
-        ->and($evidence->type)->toBe(EvidenceType::File);
+        ->and($evidence->type)->toBe(EvidenceType::File)
+        ->and($evidence->publicUrl())->toBe(Storage::disk('public')->url('evidence/order.pdf'));
 });
 
 test('measure credential hides its password hash from serialization', function () {

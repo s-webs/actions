@@ -1,6 +1,8 @@
 <?php
 
+use App\Enums\EvidenceType;
 use App\Enums\ReviewState;
+use App\Models\Evidence;
 use App\Models\Measure;
 use App\Models\MeasurePeriodState;
 use App\Models\MeasureStage;
@@ -8,6 +10,7 @@ use App\Models\Period;
 use App\Models\StagePeriodUpdate;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -171,6 +174,31 @@ test('an already-decided stage cannot be re-approved', function () {
     $this->actingAs($this->administrator)
         ->post(route('approval.approve', $update))
         ->assertSessionHasErrors();
+});
+
+test('the queue exposes stored files as public storage urls, not relative paths', function () {
+    $measure = Measure::factory()->create();
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $period = Period::factory()->create();
+    StagePeriodUpdate::factory()->create([
+        'measure_stage_id' => $stage->id,
+        'period_id' => $period->id,
+        'review_state' => ReviewState::Submitted,
+    ]);
+    Evidence::factory()->create([
+        'measure_id' => $measure->id,
+        'measure_stage_id' => $stage->id,
+        'period_id' => $period->id,
+        'type' => EvidenceType::File,
+        'path_or_url' => 'evidence/52/report.xlsx',
+        'title' => 'Отчёт',
+    ]);
+
+    $this->actingAs($this->administrator)
+        ->get(route('approval.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('updates.0.evidences.0.path_or_url', Storage::disk('public')->url('evidence/52/report.xlsx'))
+            ->where('updates.0.evidences.0.title', 'Отчёт'));
 });
 
 test('the queue prioritises an overdue stage over a merely high-risk measure', function () {

@@ -7,6 +7,7 @@ use Database\Factories\EvidenceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 class Evidence extends Model
 {
@@ -53,5 +54,17 @@ class Evidence extends Model
     public function uploadedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by_user_id');
+    }
+
+    /**
+     * Ссылка для открытия: внешний URL как есть, файл — через публичный диск (`/storage/...`).
+     */
+    public function publicUrl(): string
+    {
+        if ($this->type === EvidenceType::Link) {
+            return $this->path_or_url;
+        }
+
+        return Storage::disk('public')->url($this->path_or_url);
     }
 }

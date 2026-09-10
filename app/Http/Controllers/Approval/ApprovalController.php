@@ -72,7 +72,12 @@ class ApprovalController extends Controller
                     'evidences' => Evidence::where('measure_stage_id', $u->stage->id)
                         ->where('period_id', $u->period_id)
                         ->get()
-                        ->map(fn ($e) => ['id' => $e->id, 'title' => $e->title, 'path_or_url' => $e->path_or_url, 'type' => $e->type->value]),
+                        ->map(fn (Evidence $e) => [
+                            'id' => $e->id,
+                            'title' => $e->title,
+                            'path_or_url' => $e->publicUrl(),
+                            'type' => $e->type->value,
+                        ]),
                 ];
             }),
         ]);

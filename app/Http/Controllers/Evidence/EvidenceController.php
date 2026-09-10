@@ -34,7 +34,7 @@ class EvidenceController extends Controller
             'title' => $e->title,
             'form' => $e->form,
             'type' => $e->type->value,
-            'url' => $e->type->value === 'link' ? $e->path_or_url : Storage::disk('public')->url($e->path_or_url),
+            'url' => $e->publicUrl(),
             'measure' => ['id' => $e->measure->id, 'number' => $e->measure->number, 'title' => $e->measure->title],
             'stage_title' => $e->stage?->title,
             'period' => $e->period?->month->format('Y-m'),
