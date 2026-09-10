@@ -12,4 +12,9 @@ enum ReviewState: string
     case Approved = 'approved';
     case Rejected = 'rejected';
     case Rework = 'rework';
+
+    public function label(): string
+    {
+        return __('enums.review_state.'.$this->value);
+    }
 }

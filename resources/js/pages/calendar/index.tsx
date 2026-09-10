@@ -3,17 +3,10 @@ import { Head } from '@inertiajs/react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
+import { useLabels } from '@/lib/labels';
 import { type BreadcrumbItem } from '@/types';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
-
-const STATUS_LABELS: Record<MeasureStatus, string> = {
-    not_started: 'Не начато',
-    in_progress: 'В работе',
-    at_risk: 'Есть риск',
-    overdue: 'Просрочено',
-    done: 'Выполнено',
-};
 
 interface MonthEntry {
     month: string;
@@ -33,6 +26,8 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Календарь контро
  * [[Функциональные требования#4.4 Модуль «Календарь контроля»]].
  */
 export default function CalendarIndex({ months }: CalendarProps) {
+    const { measureStatus } = useLabels();
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Календарь контроля" />
@@ -60,7 +55,7 @@ export default function CalendarIndex({ months }: CalendarProps) {
                                                 №{measure.number}. {measure.title}
                                             </span>
                                             <span className="text-muted-foreground">
-                                                {STATUS_LABELS[measure.status]} · {measure.percent}%
+                                                {measureStatus(measure.status)} · {measure.percent}%
                                             </span>
                                         </li>
                                     ))}

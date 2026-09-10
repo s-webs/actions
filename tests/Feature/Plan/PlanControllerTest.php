@@ -7,6 +7,7 @@ use App\Models\Measure;
 use App\Models\MeasurePeriodState;
 use App\Models\MeasureStage;
 use App\Models\Period;
+use App\Models\Responsible;
 use App\Models\StagePeriodUpdate;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
@@ -82,6 +83,20 @@ test('the risk level filter narrows the registry', function () {
 
     $this->actingAs($this->administrator)
         ->get(route('plan.index', ['risk_level' => RiskLevel::High->value]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('measures.data', fn ($data) => count($data) === 1)
+            ->where('measures.data.0.number', 1));
+});
+
+test('the responsible name filter narrows the registry', function () {
+    $matching = Responsible::factory()->create(['name' => 'Проректор по АР']);
+    $other = Responsible::factory()->create(['name' => 'Декан']);
+
+    Measure::factory()->create(['number' => 1, 'responsible_id' => $matching->id]);
+    Measure::factory()->create(['number' => 2, 'responsible_id' => $other->id]);
+
+    $this->actingAs($this->administrator)
+        ->get(route('plan.index', ['responsible' => 'Проректор']))
         ->assertInertia(fn (Assert $page) => $page
             ->where('measures.data', fn ($data) => count($data) === 1)
             ->where('measures.data.0.number', 1));

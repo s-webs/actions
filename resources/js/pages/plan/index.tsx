@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { useLabels } from '@/lib/labels';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
 type RiskLevel = 'high' | 'medium' | 'low';
@@ -50,19 +51,11 @@ interface PlanIndexProps {
     measures: Paginated<MeasureRow>;
     filters: Record<string, string | undefined>;
     directions: { id: number; number: number; name: string }[];
-    responsibles: { id: number; name: string }[];
     statuses: MeasureStatus[];
     canManageStages: boolean;
+    canCreate: boolean;
     isDeveloper: boolean;
 }
-
-const STATUS_LABELS: Record<MeasureStatus, string> = {
-    not_started: 'Не начато',
-    in_progress: 'В работе',
-    at_risk: 'Есть риск',
-    overdue: 'Просрочено',
-    done: 'Выполнено',
-};
 
 const STATUS_VARIANT: Record<MeasureStatus, 'secondary' | 'default' | 'destructive' | 'outline'> = {
     not_started: 'outline',
@@ -70,12 +63,6 @@ const STATUS_VARIANT: Record<MeasureStatus, 'secondary' | 'default' | 'destructi
     at_risk: 'default',
     overdue: 'destructive',
     done: 'default',
-};
-
-const RISK_LABELS: Record<RiskLevel, string> = {
-    high: 'Высокий',
-    medium: 'Средний',
-    low: 'Низкий',
 };
 
 const ALL = '__all__';
@@ -141,12 +128,14 @@ function AddStageForm({ measureId }: { measureId: number }) {
 function StageManager({
     measureId,
     stages,
+    percent,
     canManage,
     stagesConfirmed,
     isDeveloper,
 }: {
     measureId: number;
     stages: StageRow[];
+    percent: number;
     canManage: boolean;
     stagesConfirmed: boolean;
     isDeveloper: boolean;
@@ -155,6 +144,9 @@ function StageManager({
     // здесь у администратора остаётся оверрайд только до фиксации; после неё правки
     // доступны исключительно разработчику ([[Заполнение и утверждение#Последовательное заполнение этапов]]).
     const editable = isDeveloper || (canManage && !stagesConfirmed);
+    const allStagesApproved = stages.length > 0 && stages.every((s) => s.review_state === 'approved');
+    const canAcceptWork = canManage && allStagesApproved && percent < 100;
+    const { reviewState } = useLabels();
 
     if (stages.length === 0 && !editable) {
         return <p className="text-muted-foreground text-sm">Этапы ещё не заведены исполнителем.</p>;
@@ -166,6 +158,25 @@ function StageManager({
                 <p className="mb-2 text-xs text-muted-foreground">
                     Список этапов зафиксирован{!isDeveloper && canManage && ' — редактирование доступно только разработчику'}.
                 </p>
+            )}
+            {canAcceptWork && (
+                <div className="mb-3">
+                    <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                            if (
+                                confirm(
+                                    'Принять работу и установить выполнение на 100%? Утверждённые % по всем этапам будут подняты до 100, статус — «Выполнено».',
+                                )
+                            ) {
+                                router.post(route('plan.measures.accept', measureId), {}, { preserveScroll: true });
+                            }
+                        }}
+                    >
+                        Принять работу (100%)
+                    </Button>
+                </div>
             )}
             {stages.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
@@ -191,7 +202,7 @@ function StageManager({
                                 <td className="pr-4">{s.title}</td>
                                 <td className="pr-4">{s.planned_date ?? '—'}</td>
                                 <td className="pr-4">{s.weight}%</td>
-                                <td className="pr-4">{s.review_state ?? 'черновик'}</td>
+                                <td className="pr-4">{reviewState(s.review_state)}</td>
                                 {editable && (
                                     <td>
                                         <Button
@@ -219,9 +230,11 @@ function StageManager({
     );
 }
 
-export default function PlanIndex({ measures, filters, directions, responsibles, statuses, canManageStages, isDeveloper }: PlanIndexProps) {
+export default function PlanIndex({ measures, filters, directions, statuses, canManageStages, canCreate, isDeveloper }: PlanIndexProps) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [search, setSearch] = useState(filters.search ?? '');
+    const [responsible, setResponsible] = useState(filters.responsible ?? '');
+    const { measureStatus, riskLevel } = useLabels();
 
     function apply(next: Record<string, string | boolean | undefined>) {
         router.get(
@@ -233,7 +246,7 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
 
     function submitSearch(e: FormEvent) {
         e.preventDefault();
-        apply({ search });
+        apply({ search, responsible: responsible || undefined });
     }
 
     return (
@@ -244,6 +257,11 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
                 <div className="flex items-center justify-between">
                     <h1 className="text-xl font-medium">План: реестр мероприятий</h1>
                     <div className="flex gap-4">
+                        {canCreate && (
+                            <Link href={route('plan.create')} className="text-sm text-primary underline-offset-4 hover:underline">
+                                Добавить мероприятие
+                            </Link>
+                        )}
                         <a href={route('reports.plan-xlsx')} className="text-sm text-primary underline-offset-4 hover:underline">
                             Экспорт в xlsx
                         </a>
@@ -286,23 +304,14 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
                     </div>
 
                     <div className="grid gap-2">
-                        <Label>Ответственный</Label>
-                        <Select
-                            value={filters.responsible_id ?? ALL}
-                            onValueChange={(v) => apply({ responsible_id: v === ALL ? undefined : v })}
-                        >
-                            <SelectTrigger className="w-56">
-                                <SelectValue placeholder="Все ответственные" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value={ALL}>Все ответственные</SelectItem>
-                                {responsibles.map((r) => (
-                                    <SelectItem key={r.id} value={String(r.id)}>
-                                        {r.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <Label htmlFor="responsible">Ответственный</Label>
+                        <Input
+                            id="responsible"
+                            className="w-56"
+                            placeholder="Имя ответственного"
+                            value={responsible}
+                            onChange={(e) => setResponsible(e.target.value)}
+                        />
                     </div>
 
                     <div className="grid gap-2">
@@ -315,7 +324,7 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
                                 <SelectItem value={ALL}>Все статусы</SelectItem>
                                 {statuses.map((s) => (
                                     <SelectItem key={s} value={s}>
-                                        {STATUS_LABELS[s]}
+                                        {measureStatus(s)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -335,7 +344,7 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
                                 <SelectItem value={ALL}>Любой</SelectItem>
                                 {(['high', 'medium', 'low'] as RiskLevel[]).map((r) => (
                                     <SelectItem key={r} value={r}>
-                                        {RISK_LABELS[r]}
+                                        {riskLevel(r)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -391,7 +400,7 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
                                         <td className="p-3">{m.responsible}</td>
                                         <td className="p-3">{m.deadline}</td>
                                         <td className="p-3">
-                                            <Badge variant={STATUS_VARIANT[m.status]}>{STATUS_LABELS[m.status]}</Badge>
+                                            <Badge variant={STATUS_VARIANT[m.status]}>{measureStatus(m.status)}</Badge>
                                             {m.needs_decision && (
                                                 <Badge variant="destructive" className="ml-1">
                                                     решение
@@ -399,7 +408,7 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
                                             )}
                                         </td>
                                         <td className="p-3">{m.percent}%</td>
-                                        <td className="p-3">{m.risk_level && <Badge variant="outline">{RISK_LABELS[m.risk_level]}</Badge>}</td>
+                                        <td className="p-3">{m.risk_level && <Badge variant="outline">{riskLevel(m.risk_level)}</Badge>}</td>
                                     </tr>
                                     {expanded === m.id && (
                                         <tr>
@@ -410,6 +419,7 @@ export default function PlanIndex({ measures, filters, directions, responsibles,
                                                         <StageManager
                                                             measureId={m.id}
                                                             stages={m.stages}
+                                                            percent={m.percent}
                                                             canManage={canManageStages}
                                                             stagesConfirmed={m.stages_confirmed}
                                                             isDeveloper={isDeveloper}

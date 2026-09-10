@@ -12,4 +12,9 @@ enum MeasureStatus: string
     case AtRisk = 'at_risk';
     case Overdue = 'overdue';
     case Done = 'done';
+
+    public function label(): string
+    {
+        return __('enums.measure_status.'.$this->value);
+    }
 }

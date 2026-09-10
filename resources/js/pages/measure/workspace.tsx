@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useLabels } from '@/lib/labels';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
 type ReviewState = 'draft' | 'submitted' | 'approved' | 'rejected' | 'rework';
@@ -137,22 +138,6 @@ function ChangeLogCard({ entry }: { entry: ChangeLogEntry }) {
         </div>
     );
 }
-
-const STATUS_LABELS: Record<MeasureStatus, string> = {
-    not_started: 'Не начато',
-    in_progress: 'В работе',
-    at_risk: 'Есть риск',
-    overdue: 'Просрочено',
-    done: 'Выполнено',
-};
-
-const REVIEW_LABELS: Record<ReviewState, string> = {
-    draft: 'Черновик',
-    submitted: 'На проверке',
-    approved: 'Утверждён',
-    rejected: 'Отклонён',
-    rework: 'На доработку',
-};
 
 const ACCEPTED_FILE_EXTENSIONS = '.doc,.docx,.pdf,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.bmp,.webp,.svg,.tif,.tiff,.heic,.heif';
 
@@ -357,6 +342,7 @@ function StageSidebar({ stages }: { stages: StageListItem[] }) {
  * (последовательное заполнение), [[Функциональные требования#4.7 Рабочее место мероприятия]].
  */
 export default function Workspace({ measure, period, measureState, stagesConfirmed, stageList, currentStage, history, changeLog }: WorkspaceProps) {
+    const { measureStatus, reviewState: reviewStateLabel, labels } = useLabels();
     const { data, setData, patch, transform, processing, errors } = useForm({
         measure_status: measureState.status,
         risk_text: measureState.risk_text ?? '',
@@ -398,7 +384,7 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                     </p>
                     <h1 className="text-xl font-medium">{measure.title}</h1>
                     <p className="text-muted-foreground mt-1 text-sm">
-                        Срок: {measure.deadline ?? '—'} · Статус: {STATUS_LABELS[measure.status]} · % исполнения: {measure.percent}
+                        Срок: {measure.deadline ?? '—'} · Статус: {measureStatus(measure.status)} · % исполнения: {measure.percent}
                     </p>
                 </div>
                 <Button type="button" variant="ghost" size="sm" onClick={() => router.post(route('measure.logout'))}>
@@ -430,7 +416,7 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                         <h2 className="font-medium">
                                             Этап {currentStage.order}. {currentStage.title}
                                         </h2>
-                                        <Badge variant="outline">{REVIEW_LABELS[reviewState]}</Badge>
+                                        <Badge variant="outline">{reviewStateLabel(reviewState)}</Badge>
                                     </div>
                                     <p className="text-muted-foreground text-sm">
                                         Плановая дата: {currentStage.planned_date ?? '—'} · Вес: {currentStage.weight}%
@@ -453,9 +439,9 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {(Object.keys(STATUS_LABELS) as MeasureStatus[]).map((s) => (
+                                                {(Object.keys(labels.measure_status) as MeasureStatus[]).map((s) => (
                                                     <SelectItem key={s} value={s}>
-                                                        {STATUS_LABELS[s]}
+                                                        {measureStatus(s)}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -572,7 +558,7 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                 <ul className="flex flex-col gap-2 text-sm">
                                     {history.map((h) => (
                                         <li key={h.id} className="border-t pt-2 first:border-t-0 first:pt-0">
-                                            <strong>{REVIEW_LABELS[h.review_state]}</strong> — {h.stage_title}
+                                            <strong>{reviewStateLabel(h.review_state)}</strong> — {h.stage_title}
                                             {h.approved_percent !== null && ` (${h.approved_percent}%)`}
                                             {h.approved_at && <span className="text-muted-foreground"> · {h.approved_at}</span>}
                                             {h.review_comment && <p className="text-muted-foreground">{h.review_comment}</p>}

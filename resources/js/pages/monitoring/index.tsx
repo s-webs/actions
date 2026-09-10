@@ -2,6 +2,7 @@ import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
 import AppLayout from '@/layouts/app-layout';
+import { useLabels } from '@/lib/labels';
 import { type BreadcrumbItem } from '@/types';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
@@ -28,14 +29,6 @@ interface MonitoringProps {
     rows: Row[];
 }
 
-const STATUS_LABELS: Record<MeasureStatus, string> = {
-    not_started: 'Не начато',
-    in_progress: 'В работе',
-    at_risk: 'Есть риск',
-    overdue: 'Просрочено',
-    done: 'Выполнено',
-};
-
 const SYMBOL_COLOR: Record<string, string> = {
     '✓': 'text-green-600',
     '↗': 'text-blue-600',
@@ -51,6 +44,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Помесячный монит
  * [[Функциональные требования#4.3 Модуль «Помесячный мониторинг»]].
  */
 export default function MonitoringIndex({ months, currentMonth, rows }: MonitoringProps) {
+    const { measureStatus } = useLabels();
     const [selected, setSelected] = useState<{ row: Row; cell: Cell } | null>(null);
 
     return (
@@ -104,7 +98,7 @@ export default function MonitoringIndex({ months, currentMonth, rows }: Monitori
                         </p>
                         {selected.cell.status ? (
                             <p className="text-muted-foreground">
-                                Статус: {STATUS_LABELS[selected.cell.status]} · % исполнения: {selected.cell.percent}
+                                Статус: {measureStatus(selected.cell.status)} · % исполнения: {selected.cell.percent}
                             </p>
                         ) : (
                             <p className="text-muted-foreground">Данных за этот месяц нет.</p>

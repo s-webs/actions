@@ -4,12 +4,12 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { Archive, BookOpen, Calendar, CalendarClock, ClipboardCheck, ClipboardList, FileText, Folder, History, KeyRound, LayoutGrid, Users } from 'lucide-react';
+import { Archive, BookOpen, Calendar, CalendarClock, ClipboardCheck, ClipboardList, FileText, Folder, History, KeyRound, LayoutGrid, ListTree, Users } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
+        title: 'Дашборд',
         url: '/dashboard',
         icon: LayoutGrid,
     },
@@ -17,6 +17,11 @@ const mainNavItems: NavItem[] = [
         title: 'План',
         url: '/plan',
         icon: ClipboardList,
+    },
+    {
+        title: 'Направления',
+        url: '/directions',
+        icon: ListTree,
     },
     {
         title: 'Проверка этапов',

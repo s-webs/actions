@@ -7,7 +7,6 @@ use App\Enums\ReviewState;
 use App\Http\Controllers\Controller;
 use App\Models\Direction;
 use App\Models\Measure;
-use App\Models\Responsible;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -59,14 +58,14 @@ class PlanController extends Controller
         return Inertia::render('plan/index', [
             'measures' => $measures,
             'filters' => $request->only([
-                'search', 'direction_id', 'responsible_id', 'status', 'risk_level',
+                'search', 'direction_id', 'responsible', 'status', 'risk_level',
                 'needs_decision', 'has_stages_to_review', 'deadline_from', 'deadline_to',
                 'sort', 'direction',
             ]),
             'directions' => Direction::orderBy('number')->get(['id', 'number', 'name']),
-            'responsibles' => Responsible::orderBy('name')->get(['id', 'name']),
             'statuses' => collect(MeasureStatus::cases())->map->value,
             'canManageStages' => Auth::user()->can('manage', Measure::class),
+            'canCreate' => Auth::user()->can('create', Measure::class),
             'isDeveloper' => Auth::user()->hasRole('developer'),
         ]);
     }
@@ -80,7 +79,10 @@ class PlanController extends Controller
                     ->orWhere('number', 'like', "%{$search}%"));
             })
             ->when($request->filled('direction_id'), fn ($q) => $q->where('direction_id', $request->integer('direction_id')))
-            ->when($request->filled('responsible_id'), fn ($q) => $q->where('responsible_id', $request->integer('responsible_id')))
+            ->when($request->filled('responsible'), function ($q) use ($request) {
+                $name = $request->string('responsible')->toString();
+                $q->whereHas('responsible', fn ($q) => $q->where('name', 'like', "%{$name}%"));
+            })
             ->when($request->filled('risk_level'), fn ($q) => $q->where('risk_level', $request->string('risk_level')))
             ->when($request->filled('deadline_from'), fn ($q) => $q->whereDate('deadline', '>=', $request->string('deadline_from')))
             ->when($request->filled('deadline_to'), fn ($q) => $q->whereDate('deadline', '<=', $request->string('deadline_to')))

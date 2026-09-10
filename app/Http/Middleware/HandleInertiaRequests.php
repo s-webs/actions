@@ -2,6 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\MeasureStatus;
+use App\Enums\ReviewState;
+use App\Enums\RiskLevel;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -38,13 +41,24 @@ class HandleInertiaRequests extends Middleware
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
-        return array_merge(parent::share($request), [
+        return [
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
             ],
-        ]);
+            'labels' => [
+                'measure_status' => collect(MeasureStatus::cases())
+                    ->mapWithKeys(fn (MeasureStatus $status) => [$status->value => $status->label()])
+                    ->all(),
+                'review_state' => collect(ReviewState::cases())
+                    ->mapWithKeys(fn (ReviewState $state) => [$state->value => $state->label()])
+                    ->all(),
+                'risk_level' => collect(RiskLevel::cases())
+                    ->mapWithKeys(fn (RiskLevel $level) => [$level->value => $level->label()])
+                    ->all(),
+            ],
+        ];
     }
 }

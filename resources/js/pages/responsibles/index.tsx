@@ -1,6 +1,9 @@
 import { Head } from '@inertiajs/react';
+import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 
@@ -26,6 +29,18 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Свод по ответств�
  * [[Функциональные требования#4.5 Модуль «Свод по ответственным»]].
  */
 export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
+    const [search, setSearch] = useState('');
+
+    const filteredRows = useMemo(() => {
+        const needle = search.trim().toLowerCase();
+
+        if (needle === '') {
+            return rows;
+        }
+
+        return rows.filter((row) => row.name.toLowerCase().includes(needle));
+    }, [rows, search]);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Свод по ответственным" />
@@ -35,6 +50,16 @@ export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
                 <p className="text-muted-foreground text-sm">
                     Подсветка «перегружен» — временная эвристика (число мероприятий выше среднего), методика уточняется у заказчика.
                 </p>
+
+                <div className="grid max-w-sm gap-2">
+                    <Label htmlFor="responsible-search">Поиск по имени</Label>
+                    <Input
+                        id="responsible-search"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Начните вводить имя"
+                    />
+                </div>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-left text-sm">
@@ -49,7 +74,7 @@ export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.map((row) => (
+                            {filteredRows.map((row) => (
                                 <tr key={row.name} className="border-t">
                                     <td className="p-3">
                                         {row.name}
@@ -66,6 +91,13 @@ export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
                                     <td className="p-3">{row.nearest_deadline ?? '—'}</td>
                                 </tr>
                             ))}
+                            {filteredRows.length === 0 && (
+                                <tr className="border-t">
+                                    <td className="p-3 text-muted-foreground" colSpan={6}>
+                                        Ничего не найдено
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>

@@ -4,17 +4,10 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
+import { useLabels } from '@/lib/labels';
 import { type BreadcrumbItem } from '@/types';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
-
-const STATUS_LABELS: Record<MeasureStatus, string> = {
-    not_started: 'Не начато',
-    in_progress: 'В работе',
-    at_risk: 'Есть риск',
-    overdue: 'Просрочено',
-    done: 'Выполнено',
-};
 
 const STATUS_COLORS: Record<MeasureStatus, string> = {
     not_started: '#a1a1aa',
@@ -55,9 +48,11 @@ interface DashboardProps {
     generatedAt: string;
 }
 
-const RISK_LABELS: Record<string, string> = { high: 'Высокий', medium: 'Средний', low: 'Низкий' };
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Кабинет проректора', href: '/dashboard' }];
 
 function MeasureRow({ m }: { m: MeasureSummary }) {
+    const { measureStatus } = useLabels();
+
     return (
         <tr className="border-t">
             <td className="p-2">{m.number}</td>
@@ -66,20 +61,19 @@ function MeasureRow({ m }: { m: MeasureSummary }) {
             <td className="p-2">{m.deadline}</td>
             <td className="p-2">{m.percent}%</td>
             <td className="p-2">
-                <Badge variant="outline">{STATUS_LABELS[m.status]}</Badge>
+                <Badge variant="outline">{measureStatus(m.status)}</Badge>
             </td>
             <td className="p-2 text-muted-foreground">{m.problem ?? '—'}</td>
         </tr>
     );
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Кабинет проректора', href: '/dashboard' }];
-
 /**
  * «Кабинет проректора» — task-009,
  * [[Функциональные требования#4.2 Модуль «Кабинет проректора» — дашборд]].
  */
 export default function Dashboard({ kpis, statusBreakdown, directionSummary, upcomingDeadlines, needsDecision, topRisks, generatedAt }: DashboardProps) {
+    const { measureStatus, riskLevel } = useLabels();
     const maxDirectionPercent = Math.max(...directionSummary.map((d) => d.avg_percent), 1);
 
     return (
@@ -145,7 +139,7 @@ export default function Dashboard({ kpis, statusBreakdown, directionSummary, upc
                                             <Cell key={s.status} fill={STATUS_COLORS[s.status]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip formatter={(value, _name, entry) => [value, STATUS_LABELS[entry.payload.status as MeasureStatus]]} />
+                                    <Tooltip formatter={(value, _name, entry) => [value, measureStatus(entry.payload.status as MeasureStatus)]} />
                                 </PieChart>
                             </ResponsiveContainer>
                         </CardContent>
@@ -230,7 +224,7 @@ export default function Dashboard({ kpis, statusBreakdown, directionSummary, upc
                                             <span>
                                                 №{m.number}. {m.title}
                                             </span>
-                                            {m.risk_level && <Badge variant="outline">{RISK_LABELS[m.risk_level]}</Badge>}
+                                            {m.risk_level && <Badge variant="outline">{riskLevel(m.risk_level)}</Badge>}
                                         </div>
                                         <p className="text-muted-foreground">
                                             {m.responsible} · срок {m.deadline ?? '—'} · {m.percent}%

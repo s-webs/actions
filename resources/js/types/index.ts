@@ -25,6 +25,11 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    labels: {
+        measure_status: Record<string, string>;
+        review_state: Record<string, string>;
+        risk_level: Record<string, string>;
+    };
     [key: string]: unknown;
 }
 

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
+import { useLabels } from '@/lib/labels';
 
 interface Evidence {
     id: number;
@@ -33,13 +34,12 @@ interface ApprovalIndexProps {
     updates: QueueItem[];
 }
 
-const RISK_LABELS: Record<string, string> = { high: 'Высокий', medium: 'Средний', low: 'Низкий' };
-
 /**
  * Очередь «Этапы на проверку» — task-008,
  * [[Функциональные требования#4.13 Модуль «Проверка и утверждение этапов» (проректор)]].
  */
 export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
+    const { riskLevel, reviewState } = useLabels();
     const [selectedId, setSelectedId] = useState<number | null>(updates[0]?.id ?? null);
     const [percent, setPercent] = useState('');
     const [comment, setComment] = useState('');
@@ -87,7 +87,7 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                                     №{u.measure.number}. {u.measure.title}
                                 </span>
                                 <Badge variant={u.review_state === 'rework' ? 'secondary' : 'outline'}>
-                                    {u.review_state === 'rework' ? 'на доработке' : 'подан'}
+                                    {reviewState(u.review_state)}
                                 </Badge>
                             </div>
                             <p className="text-muted-foreground">{u.stage.title}</p>
@@ -110,7 +110,7 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                             <p className="text-muted-foreground text-sm">
                                 Этап: {selected.stage.title} (вес {selected.stage.weight}%, плановая дата{' '}
                                 {selected.stage.planned_date ?? '—'}) · Срок мероприятия: {selected.measure.deadline ?? '—'} · Уровень риска:{' '}
-                                {selected.measure.risk_level ? RISK_LABELS[selected.measure.risk_level] : '—'}
+                                {selected.measure.risk_level ? riskLevel(selected.measure.risk_level) : '—'}
                             </p>
                         </div>
 

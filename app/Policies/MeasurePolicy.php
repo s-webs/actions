@@ -19,6 +19,12 @@ class MeasurePolicy
         return $user->hasRole('administrator');
     }
 
+    /** Ручное создание мероприятия через UI — та же роль, что и импорт плана. */
+    public function create(User $user): bool
+    {
+        return $user->hasRole('administrator');
+    }
+
     /** Учётные данные мероприятий, структурный оверрайд этапов — [[Функциональные требования#4.14]]. */
     public function manage(User $user): bool
     {
