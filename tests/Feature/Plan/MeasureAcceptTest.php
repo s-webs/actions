@@ -25,7 +25,7 @@ test('an administrator can accept work when all stages are approved', function (
         MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 3, 'weight' => 95]),
     ];
 
-    foreach ([30, 70, 100] as $index => $approvedPercent) {
+    foreach ([30, 70, 95] as $index => $approvedPercent) {
         StagePeriodUpdate::factory()->create([
             'measure_stage_id' => $stages[$index]->id,
             'period_id' => $period->id,
@@ -66,7 +66,7 @@ test('an observer cannot accept work', function () {
     $observer->assignRole('observer');
 
     $measure = Measure::factory()->create(['percent' => 50]);
-    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'weight' => 100]);
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'weight' => 95]);
     StagePeriodUpdate::factory()->create([
         'measure_stage_id' => $stage->id,
         'period_id' => Period::factory(),

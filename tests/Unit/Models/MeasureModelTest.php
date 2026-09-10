@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\EvidenceType;
+use App\Enums\MeasureStatus;
 use App\Enums\PeriodState;
 use App\Enums\ReviewState;
 use App\Enums\RiskLevel;
@@ -71,4 +72,42 @@ test('measure credential hides its password hash from serialization', function (
 
     expect($measure->credential->is($credential))->toBeTrue()
         ->and($credential->toArray())->not->toHaveKey('password_hash');
+});
+
+test('a deadline in 10 days is at risk with medium risk', function () {
+    $measure = Measure::factory()->create(['deadline' => now()->addDays(10), 'percent' => 0]);
+
+    expect($measure->currentStatus())->toBe(MeasureStatus::AtRisk)
+        ->and($measure->currentRiskLevel())->toBe(RiskLevel::Medium);
+});
+
+test('a deadline in 5 days is at risk with high risk', function () {
+    $measure = Measure::factory()->create(['deadline' => now()->addDays(5), 'percent' => 0]);
+
+    expect($measure->currentStatus())->toBe(MeasureStatus::AtRisk)
+        ->and($measure->currentRiskLevel())->toBe(RiskLevel::High);
+});
+
+test('a deadline yesterday is overdue with high risk', function () {
+    $measure = Measure::factory()->create(['deadline' => now()->subDay(), 'percent' => 0]);
+
+    expect($measure->currentStatus())->toBe(MeasureStatus::Overdue)
+        ->and($measure->currentRiskLevel())->toBe(RiskLevel::High);
+});
+
+test('an unapproved stage with a past planned date is overdue even if the deadline is far', function () {
+    $measure = Measure::factory()->create(['deadline' => now()->addMonths(6), 'percent' => 0]);
+    MeasureStage::factory()->create(['measure_id' => $measure->id, 'planned_date' => now()->subDay()]);
+
+    $measure->refresh()->load('stages');
+
+    expect($measure->currentStatus())->toBe(MeasureStatus::Overdue)
+        ->and($measure->currentRiskLevel())->toBe(RiskLevel::High);
+});
+
+test('percent 100 is done and is not overdue', function () {
+    $measure = Measure::factory()->create(['percent' => 100, 'deadline' => now()->subDay()]);
+
+    expect($measure->currentStatus())->toBe(MeasureStatus::Done)
+        ->and($measure->currentRiskLevel())->toBeNull();
 });

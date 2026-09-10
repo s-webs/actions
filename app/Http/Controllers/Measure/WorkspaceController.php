@@ -9,6 +9,7 @@ use App\Enums\SubmittedVia;
 use App\Http\Controllers\Approval\ApprovalController;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Plan\MeasureStageController;
+use App\Models\Evidence;
 use App\Models\Measure;
 use App\Models\MeasureCredential;
 use App\Models\MeasurePeriodState;
@@ -21,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -77,7 +79,9 @@ class WorkspaceController extends Controller
             ],
             'period' => ['id' => $period->id, 'month' => $period->month->format('Y-m')],
             'measureState' => [
-                'status' => $measureState->status->value,
+                'status' => in_array($measureState->status, [MeasureStatus::NotStarted, MeasureStatus::InProgress], true)
+                    ? $measureState->status->value
+                    : MeasureStatus::InProgress->value,
                 'risk_text' => $measureState->risk_text,
                 'needs_decision' => $measureState->needs_decision,
                 'locked' => $this->isMeasureStateLocked($measure, $period),
@@ -92,6 +96,12 @@ class WorkspaceController extends Controller
                 'status' => $this->stageStatus($stage, $currentStage, $confirmed),
             ]),
             'currentStage' => $currentStage ? $this->currentStagePayload($currentStage, $period) : null,
+            'completedStages' => $confirmed
+                ? $measure->stages
+                    ->filter(fn (MeasureStage $stage) => $this->stageStatus($stage, $currentStage, true) === 'completed')
+                    ->map(fn (MeasureStage $stage) => $this->completedStagePayload($stage))
+                    ->values()
+                : collect(),
             'history' => $history->map(fn (StagePeriodUpdate $u) => [
                 'id' => $u->id,
                 'stage_title' => $u->stage->title,
@@ -143,13 +153,55 @@ class WorkspaceController extends Controller
                 'review_comment' => $u->review_comment,
                 'approved_percent' => $u->approved_percent,
             ]),
-            'evidences' => $evidences->map(fn ($e) => [
-                'id' => $e->id,
-                'title' => $e->title,
-                'type' => $e->type->value,
-                'path_or_url' => $e->type === EvidenceType::Link ? $e->path_or_url : Storage::disk('public')->url($e->path_or_url),
-            ]),
+            'evidences' => $this->evidencePayload($evidences),
         ];
+    }
+
+    /**
+     * Карточка уже утверждённого этапа: последний Approved-отчёт (в любом периоде)
+     * и все прикреплённые к этапу документы.
+     *
+     * @return array<string, mixed>
+     */
+    private function completedStagePayload(MeasureStage $stage): array
+    {
+        $update = $stage->periodUpdates()
+            ->where('review_state', ReviewState::Approved)
+            ->orderByDesc('approved_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return [
+            'id' => $stage->id,
+            'order' => $stage->order,
+            'title' => $stage->title,
+            'planned_date' => $stage->planned_date?->format('Y-m-d'),
+            'weight' => $stage->weight,
+            'update' => optional($update, fn (StagePeriodUpdate $u) => [
+                'id' => $u->id,
+                'done_text' => $u->done_text,
+                'review_state' => $u->review_state->value,
+                'review_comment' => $u->review_comment,
+                'approved_percent' => $u->approved_percent,
+                'submitted_by_name' => $u->submitted_by_name,
+                'submitted_at' => $u->submitted_at?->format('Y-m-d H:i'),
+            ]),
+            'evidences' => $this->evidencePayload($stage->evidences()->get()),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, Evidence>  $evidences
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function evidencePayload($evidences)
+    {
+        return $evidences->map(fn ($e) => [
+            'id' => $e->id,
+            'title' => $e->title,
+            'type' => $e->type->value,
+            'path_or_url' => $e->type === EvidenceType::Link ? $e->path_or_url : Storage::disk('public')->url($e->path_or_url),
+        ]);
     }
 
     /**
@@ -208,7 +260,7 @@ class WorkspaceController extends Controller
         $isSubmit = $request->string('action')->toString() === 'submit';
 
         $rules = [
-            'measure_status' => ['required', 'string', 'in:'.implode(',', array_map(fn ($c) => $c->value, MeasureStatus::cases()))],
+            'measure_status' => ['required', Rule::in([MeasureStatus::NotStarted->value, MeasureStatus::InProgress->value])],
             'risk_text' => ['nullable', 'string'],
             'needs_decision' => ['boolean'],
             'done_text' => ['nullable', 'string'],
@@ -334,7 +386,7 @@ class WorkspaceController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'planned_date' => ['nullable', 'date'],
-            'weight' => ['required', 'integer', 'min:1', 'max:100'],
+            'weight' => ['required', 'integer', 'min:1', 'max:95'],
         ]);
 
         $order = ((int) $measure->stages()->max('order')) + 1;
@@ -359,7 +411,7 @@ class WorkspaceController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'planned_date' => ['nullable', 'date'],
-            'weight' => ['required', 'integer', 'min:1', 'max:100'],
+            'weight' => ['required', 'integer', 'min:1', 'max:95'],
         ]);
 
         $stage->update($data);

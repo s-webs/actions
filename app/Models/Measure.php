@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
@@ -24,6 +26,10 @@ class Measure extends Model implements AuditableContract
     /** @use HasFactory<MeasureFactory> */
     use Auditable, HasFactory, Notifiable;
 
+    public const RISK_WINDOW_DAYS = 15;
+
+    public const HIGH_RISK_DAYS = 7;
+
     protected $fillable = [
         'number',
         'direction_id',
@@ -31,7 +37,6 @@ class Measure extends Model implements AuditableContract
         'responsible_id',
         'deadline',
         'interim_monitoring_text',
-        'control_date',
         'completion_form',
         'reviewed_by',
         'risk_level',
@@ -45,7 +50,6 @@ class Measure extends Model implements AuditableContract
     {
         return [
             'deadline' => 'date',
-            'control_date' => 'date',
             'risk_level' => RiskLevel::class,
             'percent' => 'integer',
             'stages_confirmed_at' => 'datetime',
@@ -109,23 +113,91 @@ class Measure extends Model implements AuditableContract
     }
 
     /**
-     * Статус для отображения: последний зафиксированный факт периода, либо «не начато»
-     * по умолчанию — плюс живая автопросрочка ([[Бизнес-правила#Правило 1 · Автопросрочка]]):
-     * до появления ежедневной задачи планировщика (task-010) правило применяется здесь
-     * же, при каждом чтении статуса, а не персистится. «Выполнено» просрочку не
-     * перекрывает — при появлении task-010 персистентная пометка станет источником
-     * истины, а этот метод продолжит работать как безопасный дубль на случай, если
-     * задача не успела отработать день в день.
+     * Статус для отображения. «Выполнено» — только при 100%. Просрочка и риск
+     * считаются по дедлайну и плановой дате текущего этапа: риск с 15 дней,
+     * высокий с 7, просрочка — если дата уже прошла. Исполнитель задаёт только
+     * «не начато» / «в работе».
      */
     public function currentStatus(): MeasureStatus
     {
-        $status = $this->latestPeriodState?->status ?? MeasureStatus::NotStarted;
+        if ($this->percent === 100) {
+            return MeasureStatus::Done;
+        }
 
-        if ($status !== MeasureStatus::Done && $this->deadline?->isPast()) {
+        $days = $this->daysUntilControl();
+
+        if ($days !== null && $days < 0) {
             return MeasureStatus::Overdue;
         }
 
-        return $status;
+        if ($days !== null && $days <= self::RISK_WINDOW_DAYS) {
+            return MeasureStatus::AtRisk;
+        }
+
+        $status = $this->latestPeriodState?->status ?? MeasureStatus::NotStarted;
+
+        return in_array($status, [MeasureStatus::NotStarted, MeasureStatus::InProgress], true)
+            ? $status
+            : MeasureStatus::NotStarted;
+    }
+
+    /**
+     * Вычисленный риск: ≤ 7 дней — высокий, ≤ 15 — средний, просрочка — высокий.
+     */
+    public function currentRiskLevel(): ?RiskLevel
+    {
+        if ($this->percent === 100) {
+            return null;
+        }
+
+        $days = $this->daysUntilControl();
+
+        if ($days === null) {
+            return null;
+        }
+
+        if ($days < 0 || $days <= self::HIGH_RISK_DAYS) {
+            return RiskLevel::High;
+        }
+
+        if ($days <= self::RISK_WINDOW_DAYS) {
+            return RiskLevel::Medium;
+        }
+
+        return null;
+    }
+
+    /**
+     * Дней до ближайшей даты контроля (дедлайн или плановая дата текущего этапа).
+     * Отрицательное — дата уже прошла.
+     */
+    public function daysUntilControl(): ?int
+    {
+        $today = now()->startOfDay();
+
+        $offsets = $this->controlDates()
+            ->map(fn (Carbon $date) => (int) $today->diffInDays($date->copy()->startOfDay(), false));
+
+        if ($offsets->isEmpty()) {
+            return null;
+        }
+
+        $past = $offsets->filter(fn (int $days) => $days < 0);
+        if ($past->isNotEmpty()) {
+            return $past->max();
+        }
+
+        return $offsets->min();
+    }
+
+    /**
+     * @return Collection<int, Carbon>
+     */
+    public function controlDates(): Collection
+    {
+        return collect([$this->deadline, $this->currentStage()?->planned_date])
+            ->filter()
+            ->values();
     }
 
     public function evidences(): HasMany
@@ -159,34 +231,21 @@ class Measure extends Model implements AuditableContract
     }
 
     /**
-     * Общий `%` = Σ(вес этапа × последний утверждённый `%` этапа) / Σ весов —
-     * [[Бизнес-правила#Правило 2б · Общий `%` мероприятия — взвешенная сумма]]. Для
-     * каждого этапа берётся его последнее *утверждённое* значение (не последний период
-     * вообще — этап в `rework` сохраняет прежний утверждённый `%` до новой проверки).
-     * Пересчитывается кодом при каждом решении проректора (task-008), не хранится как
-     * SQL-агрегат.
+     * Общий `%` мероприятия — процент последнего утверждённого этапа (тот, что
+     * написан на этапе и который админ подтвердил). Взвешенной суммы нет: два
+     * варианта `%` не ведём. 100% появляется только через «Принять работу».
      */
     public function recalculatePercent(): int
     {
-        $stages = $this->stages;
-        $totalWeight = $stages->sum('weight');
+        $lastApproved = StagePeriodUpdate::query()
+            ->whereIn('measure_stage_id', $this->stages()->pluck('id'))
+            ->where('review_state', ReviewState::Approved)
+            ->whereNotNull('approved_percent')
+            ->orderByDesc('approved_at')
+            ->orderByDesc('id')
+            ->first();
 
-        if ($totalWeight === 0) {
-            $this->update(['percent' => 0]);
-
-            return 0;
-        }
-
-        $weightedSum = $stages->sum(function (MeasureStage $stage) {
-            $lastApproved = $stage->periodUpdates()
-                ->where('review_state', ReviewState::Approved)
-                ->orderByDesc('approved_at')
-                ->first();
-
-            return $stage->weight * ($lastApproved->approved_percent ?? 0);
-        });
-
-        $percent = (int) round($weightedSum / $totalWeight);
+        $percent = $lastApproved->approved_percent ?? 0;
         $this->update(['percent' => $percent]);
 
         return $percent;

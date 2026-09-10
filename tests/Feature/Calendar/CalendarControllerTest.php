@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Measure;
+use App\Models\MeasureStage;
 use App\Models\User;
 use Database\Seeders\CalendarFocusSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -34,16 +35,19 @@ test('a measure with a deadline in a given month is linked to that month, not an
             }));
 });
 
-test('a measure is linked by control date even without a matching deadline', function () {
-    $measure = Measure::factory()->create(['deadline' => '2027-06-20', 'control_date' => '2026-11-05']);
+test('a measure is linked by a stage planned date even without a matching deadline', function () {
+    $measure = Measure::factory()->create(['deadline' => '2027-06-20']);
+    MeasureStage::factory()->create(['measure_id' => $measure->id, 'planned_date' => '2026-11-05']);
 
     $this->actingAs($this->user)
         ->get(route('calendar.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('months', function ($months) use ($measure) {
                 $november = collect($months)->firstWhere('month', '2026-11');
+                $june = collect($months)->firstWhere('month', '2027-06');
 
-                return collect($november['measures'])->pluck('id')->contains($measure->id);
+                return collect($november['measures'])->pluck('id')->contains($measure->id)
+                    && collect($june['measures'])->pluck('id')->contains($measure->id);
             }));
 });
 

@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers\Plan;
 
+use App\Enums\EvidenceType;
 use App\Enums\MeasureStatus;
 use App\Enums\ReviewState;
 use App\Http\Controllers\Controller;
 use App\Models\Direction;
+use App\Models\Evidence;
 use App\Models\Measure;
+use App\Models\MeasureStage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -24,7 +29,7 @@ class PlanController extends Controller
     public function index(Request $request): Response
     {
         $query = Measure::query()
-            ->with(['direction', 'responsible', 'latestPeriodState', 'stages.periodUpdates']);
+            ->with(['direction', 'responsible', 'latestPeriodState', 'stages.periodUpdates', 'stages.evidences']);
 
         $this->applyFilters($query, $request);
         $this->applySort($query, $request);
@@ -41,17 +46,10 @@ class PlanController extends Controller
                 'deadline' => $measure->deadline?->format('Y-m-d'),
                 'status' => $measure->currentStatus()->value,
                 'percent' => $measure->percent,
-                'risk_level' => $measure->risk_level?->value,
+                'risk_level' => $measure->currentRiskLevel()?->value,
                 'needs_decision' => (bool) $measure->latestPeriodState?->needs_decision,
                 'stages_confirmed' => $measure->stagesConfirmed(),
-                'stages' => $measure->stages->map(fn ($stage) => [
-                    'id' => $stage->id,
-                    'order' => $stage->order,
-                    'title' => $stage->title,
-                    'planned_date' => $stage->planned_date?->format('Y-m-d'),
-                    'weight' => $stage->weight,
-                    'review_state' => $stage->periodUpdates->sortByDesc('period_id')->first()?->review_state?->value,
-                ])->values(),
+                'stages' => $measure->stages->map(fn (MeasureStage $stage) => $this->stagePayload($stage))->values(),
             ];
         });
 
@@ -84,7 +82,6 @@ class PlanController extends Controller
                 $name = $request->string('responsible')->toString();
                 $q->whereHas('responsible', fn ($q) => $q->where('name', 'like', "%{$name}%"));
             })
-            ->when($request->filled('risk_level'), fn ($q) => $q->where('risk_level', $request->string('risk_level')))
             ->when($request->filled('deadline_from'), fn ($q) => $q->whereDate('deadline', '>=', $request->string('deadline_from')))
             ->when($request->filled('deadline_to'), fn ($q) => $q->whereDate('deadline', '<=', $request->string('deadline_to')))
             ->when($request->boolean('needs_decision'), function ($q) {
@@ -96,16 +93,36 @@ class PlanController extends Controller
                 ]));
             });
 
-        if ($request->filled('status')) {
-            $status = $request->string('status')->toString();
+        $this->applyComputedStatusAndRiskFilters($query, $request);
+    }
 
-            if ($status === MeasureStatus::NotStarted->value) {
-                $query->where(fn ($q) => $q->doesntHave('latestPeriodState')
-                    ->orWhereHas('latestPeriodState', fn ($q) => $q->where('status', $status)));
-            } else {
-                $query->whereHas('latestPeriodState', fn ($q) => $q->where('status', $status));
-            }
+    /**
+     * Статус и риск считаются на лету — SQL по сохранённым полям отставал бы
+     * от экрана до ежедневного джоба.
+     */
+    private function applyComputedStatusAndRiskFilters(Builder $query, Request $request): void
+    {
+        if (! $request->filled('status') && ! $request->filled('risk_level')) {
+            return;
         }
+
+        $matches = (clone $query)
+            ->with(['latestPeriodState', 'stages'])
+            ->get()
+            ->filter(function (Measure $measure) use ($request) {
+                if ($request->filled('status') && $measure->currentStatus()->value !== $request->string('status')->toString()) {
+                    return false;
+                }
+
+                if ($request->filled('risk_level') && $measure->currentRiskLevel()?->value !== $request->string('risk_level')->toString()) {
+                    return false;
+                }
+
+                return true;
+            })
+            ->pluck('id');
+
+        $query->whereIn('id', $matches->isEmpty() ? [0] : $matches->all());
     }
 
     private function applySort(Builder $query, Request $request): void
@@ -121,5 +138,51 @@ class PlanController extends Controller
         }
 
         $query->orderBy($column, $direction);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stagePayload(MeasureStage $stage): array
+    {
+        $update = $stage->periodUpdates->sortByDesc('period_id')->first();
+        $evidences = $this->evidencePayload($stage->evidences);
+        $hasDetails = $evidences->isNotEmpty()
+            || ($update && filled($update->done_text))
+            || ($update && $update->review_state !== ReviewState::Draft);
+
+        return [
+            'id' => $stage->id,
+            'order' => $stage->order,
+            'title' => $stage->title,
+            'planned_date' => $stage->planned_date?->format('Y-m-d'),
+            'weight' => $stage->weight,
+            'review_state' => $update?->review_state?->value,
+            'update' => $update ? [
+                'id' => $update->id,
+                'done_text' => $update->done_text,
+                'review_state' => $update->review_state->value,
+                'review_comment' => $update->review_comment,
+                'approved_percent' => $update->approved_percent,
+                'submitted_by_name' => $update->submitted_by_name,
+                'submitted_at' => $update->submitted_at?->format('Y-m-d H:i'),
+            ] : null,
+            'evidences' => $evidences->values(),
+            'has_details' => $hasDetails,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, Evidence>  $evidences
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function evidencePayload(Collection $evidences): Collection
+    {
+        return $evidences->map(fn (Evidence $e) => [
+            'id' => $e->id,
+            'title' => $e->title,
+            'type' => $e->type->value,
+            'path_or_url' => $e->type === EvidenceType::Link ? $e->path_or_url : Storage::disk('public')->url($e->path_or_url),
+        ]);
     }
 }

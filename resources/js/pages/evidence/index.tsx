@@ -3,6 +3,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { evidenceLabel } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 
 interface EvidenceRow {
@@ -78,7 +79,7 @@ export default function EvidenceIndex({ evidences, measures, filters, canDelete 
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {evidences.data.map((e) => (
-                        <div key={e.id} className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+                        <div key={e.id} className="flex min-w-0 flex-col gap-2 overflow-hidden rounded-lg border p-3 text-sm">
                             {isImage(e.url) ? (
                                 <img src={e.url} alt={e.title ?? ''} className="h-32 w-full rounded object-cover" />
                             ) : (
@@ -86,10 +87,15 @@ export default function EvidenceIndex({ evidences, measures, filters, canDelete 
                                     {e.type === 'link' ? 'Ссылка' : 'Файл'}
                                 </div>
                             )}
-                            <a href={e.url} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-4 hover:underline">
-                                {e.title ?? e.url}
+                            <a
+                                href={e.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="break-all font-medium text-primary underline-offset-4 hover:underline"
+                            >
+                                {evidenceLabel(e.url, e.title)}
                             </a>
-                            <p className="text-muted-foreground">
+                            <p className="text-muted-foreground break-words">
                                 №{e.measure.number}. {e.measure.title}
                                 {e.stage_title && ` · ${e.stage_title}`}
                             </p>
@@ -97,7 +103,7 @@ export default function EvidenceIndex({ evidences, measures, filters, canDelete 
                                 {e.period ?? '—'} · {e.uploaded_at}
                             </p>
                             {canDelete && (
-                                <Button size="sm" variant="destructive" onClick={() => destroy(e.id)}>
+                                <Button size="sm" variant="destructive" className="w-full" onClick={() => destroy(e.id)}>
                                     Удалить
                                 </Button>
                             )}

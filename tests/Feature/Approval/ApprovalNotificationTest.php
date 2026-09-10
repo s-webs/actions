@@ -1,7 +1,5 @@
 <?php
 
-use App\Enums\EvidenceType;
-use App\Models\Evidence;
 use App\Models\Measure;
 use App\Models\MeasureStage;
 use App\Models\Period;
@@ -53,16 +51,15 @@ test('approving a stage does not fire a decision notification', function () {
     Notification::fake();
 
     $measure = Measure::factory()->create(['contact_email' => 'contact@example.test']);
-    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'weight' => 100]);
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'weight' => 95]);
     $period = Period::factory()->create();
     $update = StagePeriodUpdate::factory()->create([
         'measure_stage_id' => $stage->id,
         'period_id' => $period->id,
         'review_state' => 'submitted',
     ]);
-    Evidence::factory()->create(['measure_id' => $measure->id, 'measure_stage_id' => $stage->id, 'period_id' => $period->id, 'type' => EvidenceType::Link]);
 
-    $this->actingAs($this->administrator)->post(route('approval.approve', $update), ['approved_percent' => 100]);
+    $this->actingAs($this->administrator)->post(route('approval.approve', $update));
 
     Notification::assertNothingSentTo($measure);
 });

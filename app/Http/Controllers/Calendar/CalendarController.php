@@ -12,21 +12,20 @@ use Inertia\Response;
  * Календарь контроля — готовая годовая повестка мониторинга,
  * [[Функциональные требования#4.4 Модуль «Календарь контроля»]]. Связь месяц →
  * мероприятия не задана отдельной сущностью (в [[Модель данных]] её нет) — подтягиваются
- * мероприятия, у которых конечный **или** контрольный срок попадает в этот месяц; это
- * прямое эвристическое прочтение ФТ 4.4 («система подтягивает связанные мероприятия»),
- * см. открытый вопрос в [[Справочники#Ещё нужно от заказчика]].
+ * мероприятия, у которых в этот месяц попадает **дедлайн или плановая дата любого этапа**.
  */
 class CalendarController extends Controller
 {
     public function index(): Response
     {
-        $measures = Measure::with('latestPeriodState')->get();
+        $measures = Measure::with(['latestPeriodState', 'stages'])->get();
 
         $months = CalendarFocus::orderBy('month')->get()->map(function (CalendarFocus $focus) use ($measures) {
             $linked = $measures->filter(function (Measure $m) use ($focus) {
                 $inMonth = fn ($date) => $date && $date->isSameMonth($focus->month) && $date->isSameYear($focus->month);
 
-                return $inMonth($m->deadline) || $inMonth($m->control_date);
+                return $inMonth($m->deadline)
+                    || $m->stages->contains(fn ($stage) => $inMonth($stage->planned_date));
             });
 
             return [

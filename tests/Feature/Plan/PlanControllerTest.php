@@ -3,8 +3,8 @@
 use App\Enums\MeasureStatus;
 use App\Enums\ReviewState;
 use App\Enums\RiskLevel;
+use App\Models\Evidence;
 use App\Models\Measure;
-use App\Models\MeasurePeriodState;
 use App\Models\MeasureStage;
 use App\Models\Period;
 use App\Models\Responsible;
@@ -43,7 +43,7 @@ test('an observer does not receive the import permission on the plan page', func
 });
 
 test('a measure with no period state shows as not started by default', function () {
-    Measure::factory()->create(['number' => 1]);
+    Measure::factory()->create(['number' => 1, 'deadline' => now()->addMonths(6)]);
 
     $this->actingAs($this->administrator)
         ->get(route('plan.index'))
@@ -52,29 +52,19 @@ test('a measure with no period state shows as not started by default', function 
             ->where('measures.data.0.status', 'not_started'));
 });
 
-test('the status filter reflects the latest period, not an earlier one', function () {
-    $measure = Measure::factory()->create(['number' => 1]);
-    $earlier = Period::factory()->create(['month' => '2026-09-01']);
-    $later = Period::factory()->create(['month' => '2026-10-01']);
-
-    MeasurePeriodState::factory()->create([
-        'measure_id' => $measure->id,
-        'period_id' => $earlier->id,
-        'status' => MeasureStatus::AtRisk,
-    ]);
-    MeasurePeriodState::factory()->create([
-        'measure_id' => $measure->id,
-        'period_id' => $later->id,
-        'status' => MeasureStatus::Done,
-    ]);
+test('the status filter uses the computed status', function () {
+    Measure::factory()->create(['number' => 1, 'percent' => 100, 'deadline' => now()->addMonths(6)]);
+    Measure::factory()->create(['number' => 2, 'percent' => 0, 'deadline' => now()->addDays(10)]);
 
     $this->actingAs($this->administrator)
         ->get(route('plan.index', ['status' => MeasureStatus::Done->value]))
-        ->assertInertia(fn (Assert $page) => $page->where('measures.data', fn ($data) => count($data) === 1));
+        ->assertInertia(fn (Assert $page) => $page->where('measures.data', fn ($data) => count($data) === 1)
+            ->where('measures.data.0.number', 1));
 
     $this->actingAs($this->administrator)
         ->get(route('plan.index', ['status' => MeasureStatus::AtRisk->value]))
-        ->assertInertia(fn (Assert $page) => $page->where('measures.data', fn ($data) => count($data) === 0));
+        ->assertInertia(fn (Assert $page) => $page->where('measures.data', fn ($data) => count($data) === 1)
+            ->where('measures.data.0.number', 2));
 });
 
 test('the has_stages_to_review filter matches measures with a submitted stage', function () {
@@ -96,9 +86,9 @@ test('the has_stages_to_review filter matches measures with a submitted stage', 
             ->where('measures.data.0.number', 1));
 });
 
-test('the risk level filter narrows the registry', function () {
-    Measure::factory()->create(['number' => 1, 'risk_level' => RiskLevel::High]);
-    Measure::factory()->create(['number' => 2, 'risk_level' => RiskLevel::Low]);
+test('the risk level filter uses the computed risk', function () {
+    Measure::factory()->create(['number' => 1, 'deadline' => now()->addDays(5)]);
+    Measure::factory()->create(['number' => 2, 'deadline' => now()->addDays(10)]);
 
     $this->actingAs($this->administrator)
         ->get(route('plan.index', ['risk_level' => RiskLevel::High->value]))
@@ -119,4 +109,60 @@ test('the responsible name filter narrows the registry', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->where('measures.data', fn ($data) => count($data) === 1)
             ->where('measures.data.0.number', 1));
+});
+
+test('a stage with a submitted report and document exposes details for the registry card', function () {
+    $measure = Measure::factory()->create(['number' => 1]);
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 1, 'title' => 'Подготовка']);
+    $period = Period::factory()->create();
+    StagePeriodUpdate::factory()->create([
+        'measure_stage_id' => $stage->id,
+        'period_id' => $period->id,
+        'review_state' => ReviewState::Submitted,
+        'done_text' => 'Собраны данные',
+        'submitted_by_name' => 'Иванова А.С.',
+    ]);
+    $evidence = Evidence::factory()->create([
+        'measure_id' => $measure->id,
+        'measure_stage_id' => $stage->id,
+        'period_id' => $period->id,
+        'title' => 'Протокол',
+        'path_or_url' => 'https://example.test/protocol.pdf',
+    ]);
+
+    $this->actingAs($this->administrator)
+        ->get(route('plan.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('measures.data.0.stages.0.has_details', true)
+            ->where('measures.data.0.stages.0.update.done_text', 'Собраны данные')
+            ->where('measures.data.0.stages.0.update.submitted_by_name', 'Иванова А.С.')
+            ->where('measures.data.0.stages.0.evidences.0.id', $evidence->id)
+            ->where('measures.data.0.stages.0.evidences.0.title', 'Протокол'));
+});
+
+test('an empty draft does not expose details', function () {
+    $measure = Measure::factory()->create(['number' => 1]);
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    StagePeriodUpdate::factory()->create([
+        'measure_stage_id' => $stage->id,
+        'period_id' => Period::factory(),
+        'review_state' => ReviewState::Draft,
+        'done_text' => null,
+    ]);
+
+    $this->actingAs($this->administrator)
+        ->get(route('plan.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('measures.data.0.stages.0.has_details', false));
+});
+
+test('a stage without a report does not expose details', function () {
+    $measure = Measure::factory()->create(['number' => 1]);
+    MeasureStage::factory()->create(['measure_id' => $measure->id]);
+
+    $this->actingAs($this->administrator)
+        ->get(route('plan.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('measures.data.0.stages.0.has_details', false)
+            ->where('measures.data.0.stages.0.update', null));
 });

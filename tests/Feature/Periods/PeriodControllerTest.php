@@ -3,7 +3,6 @@
 use App\Enums\MeasureStatus;
 use App\Enums\PeriodState;
 use App\Enums\ReviewState;
-use App\Enums\RiskLevel;
 use App\Models\Measure;
 use App\Models\MeasureCredential;
 use App\Models\MeasurePeriodState;
@@ -28,7 +27,7 @@ test('an observer cannot close a period', function () {
 });
 
 test('closing the period snapshots every measure with its current percent, status, and risk level', function () {
-    $measure = Measure::factory()->create(['percent' => 65, 'risk_level' => RiskLevel::Medium]);
+    $measure = Measure::factory()->create(['percent' => 65, 'deadline' => now()->addMonths(6)]);
     $period = Period::current();
     MeasurePeriodState::factory()->create(['measure_id' => $measure->id, 'period_id' => $period->id, 'status' => MeasureStatus::InProgress]);
 
@@ -38,7 +37,7 @@ test('closing the period snapshots every measure with its current percent, statu
     expect($snapshot)->not->toBeNull()
         ->and($snapshot->percent)->toBe(65)
         ->and($snapshot->status)->toBe(MeasureStatus::InProgress)
-        ->and($snapshot->risk_level)->toBe(RiskLevel::Medium);
+        ->and($snapshot->risk_level)->toBeNull();
 
     expect($period->fresh()->state)->toBe(PeriodState::Closed)
         ->and($period->fresh()->closed_by)->toBe($this->administrator->id);

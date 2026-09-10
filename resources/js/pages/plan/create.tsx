@@ -24,24 +24,19 @@ interface StageDraft {
 interface PlanCreateProps {
     directions: { id: number; number: number; name: string }[];
     nextNumber: number;
-    riskLevels: { value: string; label: string }[];
     credential: CredentialFlash | null;
 }
-
-const NONE = '__none__';
 
 /**
  * Ручное создание одного мероприятия — дополнение к импорту Excel.
  */
-export default function PlanCreate({ directions, nextNumber, riskLevels, credential }: PlanCreateProps) {
+export default function PlanCreate({ directions, nextNumber, credential }: PlanCreateProps) {
     const { data, setData, post, processing, errors } = useForm({
         number: String(nextNumber),
         title: '',
         direction_id: '',
         responsible: '',
         deadline: '',
-        control_date: '',
-        risk_level: '',
         stages: [] as StageDraft[],
     });
 
@@ -149,27 +144,6 @@ export default function PlanCreate({ directions, nextNumber, riskLevels, credent
                         </div>
 
                         <div className="grid gap-2">
-                            <Label>Уровень риска</Label>
-                            <Select
-                                value={data.risk_level || NONE}
-                                onValueChange={(value) => setData('risk_level', value === NONE ? '' : value)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Не указан" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={NONE}>Не указан</SelectItem>
-                                    {riskLevels.map((level) => (
-                                        <SelectItem key={level.value} value={level.value}>
-                                            {level.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.risk_level} />
-                        </div>
-
-                        <div className="grid gap-2">
                             <Label htmlFor="deadline">Срок</Label>
                             <Input
                                 id="deadline"
@@ -178,17 +152,6 @@ export default function PlanCreate({ directions, nextNumber, riskLevels, credent
                                 onChange={(e) => setData('deadline', e.target.value)}
                             />
                             <InputError message={errors.deadline} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="control_date">Контрольная дата</Label>
-                            <Input
-                                id="control_date"
-                                type="date"
-                                value={data.control_date}
-                                onChange={(e) => setData('control_date', e.target.value)}
-                            />
-                            <InputError message={errors.control_date} />
                         </div>
                     </div>
 
@@ -235,10 +198,11 @@ export default function PlanCreate({ directions, nextNumber, riskLevels, credent
                                         id={`stage-weight-${index}`}
                                         type="number"
                                         min={1}
-                                        max={100}
+                                        max={95}
                                         value={stage.weight}
                                         onChange={(e) => updateStage(index, 'weight', e.target.value)}
                                     />
+                                    <p className="text-muted-foreground text-xs">Максимум 95%. 100% ставит администратор после приёмки.</p>
                                     <InputError message={stageError(index, 'weight')} />
                                 </div>
                                 <Button type="button" variant="ghost" size="icon" onClick={() => removeStage(index)} aria-label="Удалить этап">

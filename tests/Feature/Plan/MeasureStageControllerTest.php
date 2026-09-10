@@ -115,6 +115,16 @@ test('once the stage list is confirmed even an administrator cannot manage stage
     expect($stage->fresh()->title)->toBe('Поправлено разработчиком');
 });
 
+test('a stage weight of 100 percent is rejected', function () {
+    $measure = Measure::factory()->create();
+
+    $this->actingAs($this->administrator)
+        ->post(route('plan.stages.store', $measure), ['title' => 'Финал', 'weight' => 100])
+        ->assertSessionHasErrors('weight');
+
+    expect($measure->stages()->count())->toBe(0);
+});
+
 test('deleting a stage with approved history is blocked', function () {
     $measure = Measure::factory()->create();
     $stage = MeasureStage::factory()->create(['measure_id' => $measure->id]);

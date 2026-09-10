@@ -34,7 +34,7 @@ class MeasureStageController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'planned_date' => ['nullable', 'date'],
-            'weight' => ['required', 'integer', 'min:1', 'max:100'],
+            'weight' => ['required', 'integer', 'min:1', 'max:95'],
         ]);
 
         $order = ((int) $measure->stages()->max('order')) + 1;
@@ -52,7 +52,7 @@ class MeasureStageController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'planned_date' => ['nullable', 'date'],
-            'weight' => ['required', 'integer', 'min:1', 'max:100'],
+            'weight' => ['required', 'integer', 'min:1', 'max:95'],
         ]);
 
         $stage->update($data);

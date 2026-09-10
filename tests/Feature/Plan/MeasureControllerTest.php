@@ -37,8 +37,6 @@ test('an administrator can create a measure with credentials', function () {
         'direction_id' => $direction->id,
         'responsible' => null,
         'deadline' => '2026-12-31',
-        'control_date' => null,
-        'risk_level' => 'high',
     ]);
 
     $response->assertRedirect(route('plan.create'));
@@ -47,7 +45,7 @@ test('an administrator can create a measure with credentials', function () {
     expect($measure)->not->toBeNull()
         ->and($measure->title)->toBe('Новое мероприятие')
         ->and($measure->direction_id)->toBe($direction->id)
-        ->and($measure->risk_level?->value)->toBe('high')
+        ->and($measure->getAttributes())->not->toHaveKey('control_date')
         ->and($measure->credential)->not->toBeNull()
         ->and($measure->credential->login)->toBe('M-42');
 
@@ -81,6 +79,23 @@ test('an administrator can create a measure with optional stages', function () {
         ->and($measure->stages[1]->title)->toBe('Реализация')
         ->and($measure->stages[1]->order)->toBe(2)
         ->and($measure->stages[1]->weight)->toBe(60);
+});
+
+test('creating a measure rejects a stage weight of 100 percent', function () {
+    $administrator = User::factory()->create();
+    $administrator->assignRole('administrator');
+    $direction = Direction::factory()->create();
+
+    $this->actingAs($administrator)->post(route('plan.measures.store'), [
+        'number' => 16,
+        'title' => 'Сотня на этапе',
+        'direction_id' => $direction->id,
+        'stages' => [
+            ['title' => 'Финал', 'planned_date' => null, 'weight' => 100],
+        ],
+    ])->assertSessionHasErrors('stages.0.weight');
+
+    expect(Measure::query()->where('number', 16)->exists())->toBeFalse();
 });
 
 test('duplicate measure number is rejected', function () {

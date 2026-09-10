@@ -3,11 +3,11 @@ import { FormEvent, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { useLabels } from '@/lib/labels';
+import { evidenceLabel } from '@/lib/utils';
 
 interface Evidence {
     id: number;
@@ -23,7 +23,7 @@ interface QueueItem {
     submitted_by_name: string | null;
     submitted_at: string | null;
     period: string;
-    stage: { id: number; title: string; planned_date: string | null; weight: number };
+    stage: { id: number; title: string; planned_date: string | null; weight: number; is_last_stage: boolean };
     measure: { number: number; title: string; direction: string | null; deadline: string | null; risk_level: string | null };
     risk_text: string | null;
     needs_decision: boolean;
@@ -41,7 +41,6 @@ interface ApprovalIndexProps {
 export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
     const { riskLevel, reviewState } = useLabels();
     const [selectedId, setSelectedId] = useState<number | null>(updates[0]?.id ?? null);
-    const [percent, setPercent] = useState('');
     const [comment, setComment] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -50,13 +49,12 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
     function act(action: 'approve' | 'reject' | 'rework') {
         if (!selected) return;
 
-        const payload = action === 'approve' ? { approved_percent: percent } : { review_comment: comment };
+        const payload = action === 'approve' ? {} : { review_comment: comment };
 
         router.post(route(`approval.${action}`, selected.id), payload, {
             preserveScroll: true,
             onError: setErrors,
             onSuccess: () => {
-                setPercent('');
                 setComment('');
                 setErrors({});
             },
@@ -108,7 +106,7 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                             </p>
                             <h2 className="text-lg font-medium">{selected.measure.title}</h2>
                             <p className="text-muted-foreground text-sm">
-                                Этап: {selected.stage.title} (вес {selected.stage.weight}%, плановая дата{' '}
+                                Этап: {selected.stage.title} ({selected.stage.weight}%, плановая дата{' '}
                                 {selected.stage.planned_date ?? '—'}) · Срок мероприятия: {selected.measure.deadline ?? '—'} · Уровень риска:{' '}
                                 {selected.measure.risk_level ? riskLevel(selected.measure.risk_level) : '—'}
                             </p>
@@ -135,13 +133,13 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                         </div>
 
                         {selected.evidences.length > 0 && (
-                            <div>
+                            <div className="min-w-0">
                                 <p className="text-sm font-medium">Документы</p>
-                                <ul className="list-disc pl-5 text-sm">
+                                <ul className="min-w-0 list-disc pl-5 text-sm">
                                     {selected.evidences.map((e) => (
-                                        <li key={e.id}>
+                                        <li key={e.id} className="min-w-0 break-all">
                                             <a href={e.path_or_url} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
-                                                {e.title ?? e.path_or_url}
+                                                {evidenceLabel(e.path_or_url, e.title)}
                                             </a>
                                         </li>
                                     ))}
@@ -149,24 +147,12 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                             </div>
                         )}
                         {selected.evidences.length === 0 && (
-                            <p className="text-muted-foreground text-sm">Документов нет — 100% недоступно без доказательства.</p>
+                            <p className="text-muted-foreground text-sm">Документов нет.</p>
                         )}
 
                         <form onSubmit={submitApprove} className="flex items-end gap-2 border-t pt-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="approved_percent">Утвердить, %</Label>
-                                <Input
-                                    id="approved_percent"
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    className="w-24"
-                                    value={percent}
-                                    onChange={(e) => setPercent(e.target.value)}
-                                />
-                                {errors.approved_percent && <p className="text-sm text-destructive">{errors.approved_percent}</p>}
-                            </div>
-                            <Button type="submit">Утвердить</Button>
+                            {errors.stage && <p className="text-sm text-destructive">{errors.stage}</p>}
+                            <Button type="submit">Утвердить {selected.stage.is_last_stage ? 100 : selected.stage.weight}%</Button>
                         </form>
 
                         <div className="grid gap-2 border-t pt-4">

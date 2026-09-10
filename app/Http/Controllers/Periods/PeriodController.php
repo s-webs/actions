@@ -58,13 +58,13 @@ class PeriodController extends Controller
             return back()->withErrors(['period' => 'Период уже закрыт.']);
         }
 
-        Measure::with('stages.periodUpdates')->get()->each(function (Measure $measure) use ($period) {
+        Measure::with(['stages.periodUpdates', 'latestPeriodState'])->get()->each(function (Measure $measure) use ($period) {
             Snapshot::updateOrCreate(
                 ['measure_id' => $measure->id, 'period_id' => $period->id],
                 [
                     'percent' => $measure->percent,
                     'status' => $measure->currentStatus(),
-                    'risk_level' => $measure->risk_level,
+                    'risk_level' => $measure->currentRiskLevel(),
                     'data' => [
                         'stages' => $measure->stages->map(fn ($stage) => [
                             'title' => $stage->title,

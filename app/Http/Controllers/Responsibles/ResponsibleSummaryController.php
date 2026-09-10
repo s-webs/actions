@@ -20,7 +20,7 @@ class ResponsibleSummaryController extends Controller
 {
     public function index(): Response
     {
-        $measures = Measure::with('latestPeriodState')->get();
+        $measures = Measure::with(['latestPeriodState', 'stages'])->get();
         $responsibles = Responsible::orderBy('name')->get();
 
         $rows = $responsibles->map(function (Responsible $responsible) use ($measures) {
@@ -56,7 +56,7 @@ class ResponsibleSummaryController extends Controller
             'status_breakdown' => collect(MeasureStatus::cases())
                 ->mapWithKeys(fn ($s) => [$s->value => $statuses->filter(fn ($x) => $x === $s)->count()]),
             'avg_percent' => $measures->isEmpty() ? 0 : (int) round($measures->avg('percent')),
-            'risks' => $measures->filter(fn (Measure $m) => $m->risk_level === RiskLevel::High)->count(),
+            'risks' => $measures->filter(fn (Measure $m) => $m->currentRiskLevel() === RiskLevel::High)->count(),
             'overdue' => $statuses->filter(fn ($s) => $s === MeasureStatus::Overdue)->count(),
             'nearest_deadline' => $measures->pluck('deadline')->filter()->sort()->first()?->format('Y-m-d'),
         ];

@@ -7,6 +7,7 @@ use App\Enums\RiskLevel;
 use App\Http\Controllers\Controller;
 use App\Models\Evidence;
 use App\Models\MeasurePeriodState;
+use App\Models\MeasureStage;
 use App\Models\StagePeriodUpdate;
 use App\Notifications\StageDecisionMade;
 use Illuminate\Http\RedirectResponse;
@@ -19,8 +20,9 @@ use Inertia\Response;
 /**
  * Проверка и утверждение этапов — рабочее место проректора,
  * [[Функциональные требования#4.13 Модуль «Проверка и утверждение этапов» (проректор)]].
- * Единственная точка входа `%` в систему — [[Бизнес-правила#Правило 2а]]. Массового
- * утверждения нет — каждый этап отдельным действием.
+ * Утверждение записывает `%` этапа в мероприятие. Последний этап — 100%
+ * (исполнитель на этапе максимум 95%). «Принять работу» в плане остаётся
+ * запасным путём. Массового утверждения нет — каждый этап отдельным действием.
  */
 class ApprovalController extends Controller
 {
@@ -30,7 +32,7 @@ class ApprovalController extends Controller
 
         $updates = StagePeriodUpdate::query()
             ->whereIn('review_state', [ReviewState::Submitted, ReviewState::Rework])
-            ->with(['stage.measure.direction', 'period'])
+            ->with(['stage.measure.direction', 'stage.measure.stages', 'period'])
             ->get()
             ->sortBy(fn (StagePeriodUpdate $u) => $this->priority($u))
             ->values();
@@ -53,13 +55,14 @@ class ApprovalController extends Controller
                         'title' => $u->stage->title,
                         'planned_date' => $u->stage->planned_date?->format('Y-m-d'),
                         'weight' => $u->stage->weight,
+                        'is_last_stage' => $this->isLastUnapprovedStage($u->stage),
                     ],
                     'measure' => [
                         'number' => $u->stage->measure->number,
                         'title' => $u->stage->measure->title,
                         'direction' => $u->stage->measure->direction?->name,
                         'deadline' => $u->stage->measure->deadline?->format('Y-m-d'),
-                        'risk_level' => $u->stage->measure->risk_level?->value,
+                        'risk_level' => $u->stage->measure->currentRiskLevel()?->value,
                     ],
                     // Текст риска/проблемы, который исполнитель вписал вместе с этим отчётом
                     // за этот же период ([[Функциональные требования#4.7 Рабочее место мероприятия]])
@@ -80,19 +83,11 @@ class ApprovalController extends Controller
         Gate::authorize('approve', $update);
         $this->ensureReviewable($update);
 
-        $data = $request->validate([
-            'approved_percent' => ['required', 'integer', 'min:0', 'max:100'],
-        ]);
-
-        if ((int) $data['approved_percent'] === 100 && ! $this->hasEvidence($update)) {
-            throw ValidationException::withMessages([
-                'approved_percent' => 'Нельзя проставить 100% без подтверждающего документа за этот период.',
-            ]);
-        }
+        $update->loadMissing('stage.measure.stages');
 
         $update->update([
             'review_state' => ReviewState::Approved,
-            'approved_percent' => $data['approved_percent'],
+            'approved_percent' => $this->isLastUnapprovedStage($update->stage) ? 100 : $update->stage->weight,
             'approved_by' => $request->user()->id,
             'approved_at' => now(),
         ]);
@@ -144,16 +139,25 @@ class ApprovalController extends Controller
     {
         if (! in_array($update->review_state, [ReviewState::Submitted, ReviewState::Rework], true)) {
             throw ValidationException::withMessages([
-                'approved_percent' => 'Этап уже не находится на проверке.',
+                'stage' => 'Этап уже не находится на проверке.',
             ]);
         }
     }
 
-    private function hasEvidence(StagePeriodUpdate $update): bool
+    /**
+     * Последний неутверждённый этап: у всех остальных уже есть утверждение.
+     * Его приёмка ставит 100%, даже если на этапе написано 95%.
+     */
+    private function isLastUnapprovedStage(MeasureStage $stage): bool
     {
-        return Evidence::where('measure_stage_id', $update->measure_stage_id)
-            ->where('period_id', $update->period_id)
-            ->exists();
+        $measure = $stage->measure;
+        $measure->loadMissing('stages');
+
+        return $measure->stages
+            ->reject(fn (MeasureStage $other) => $other->id === $stage->id)
+            ->every(fn (MeasureStage $other) => $other->periodUpdates()
+                ->where('review_state', ReviewState::Approved)
+                ->exists());
     }
 
     /**
@@ -170,7 +174,7 @@ class ApprovalController extends Controller
             return 0;
         }
 
-        if ($measure->risk_level === RiskLevel::High) {
+        if ($measure->currentRiskLevel() === RiskLevel::High) {
             return 1;
         }
 

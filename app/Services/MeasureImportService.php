@@ -153,9 +153,8 @@ class MeasureImportService
                 $this->warnings[] = "Мероприятие №{$number}: не удалось разобрать срок «{$deadlineRaw}».";
             }
 
-            $controlDate = $this->parseDate($controlDateRaw);
-            if ($controlDateRaw && ! $controlDate) {
-                $this->warnings[] = "Мероприятие №{$number}: не удалось разобрать контрольную дату «{$controlDateRaw}».";
+            if ($controlDateRaw !== null && trim((string) $controlDateRaw) !== '') {
+                $this->warnings[] = "Мероприятие №{$number}: колонка «Контрольная дата» больше не используется и проигнорирована.";
             }
 
             $measure = Measure::updateOrCreate(
@@ -166,7 +165,6 @@ class MeasureImportService
                     'responsible_id' => $responsible?->id,
                     'deadline' => $deadline,
                     'interim_monitoring_text' => $interimText !== null ? trim((string) $interimText) : null,
-                    'control_date' => $controlDate,
                     'reviewed_by' => $reviewedBy !== null ? trim((string) $reviewedBy) : null,
                     'risk_level' => $riskLevel,
                     'proctor_comment' => $comment !== null && trim((string) $comment) !== '' ? trim((string) $comment) : null,

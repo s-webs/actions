@@ -22,7 +22,7 @@ class DashboardSummaryService
 
     public function build(): array
     {
-        $measures = Measure::with(['direction', 'responsible', 'latestPeriodState'])->get();
+        $measures = Measure::with(['direction', 'responsible', 'latestPeriodState', 'stages'])->get();
 
         return [
             'kpis' => $this->kpis($measures),
@@ -45,7 +45,7 @@ class DashboardSummaryService
             'in_progress' => $statuses->filter(fn ($s) => $s === MeasureStatus::InProgress)->count(),
             'at_risk' => $statuses->filter(fn ($s) => $s === MeasureStatus::AtRisk)->count(),
             'overdue' => $statuses->filter(fn ($s) => $s === MeasureStatus::Overdue)->count(),
-            'high_risk' => $measures->filter(fn (Measure $m) => $m->risk_level === RiskLevel::High)->count(),
+            'high_risk' => $measures->filter(fn (Measure $m) => $m->currentRiskLevel() === RiskLevel::High)->count(),
             'avg_percent' => $measures->isEmpty() ? 0 : (int) round($measures->avg('percent')),
             'stages_to_review' => StagePeriodUpdate::whereIn('review_state', [ReviewState::Submitted, ReviewState::Rework])->count(),
         ];
@@ -103,7 +103,7 @@ class DashboardSummaryService
                 return in_array($status, [MeasureStatus::AtRisk, MeasureStatus::Overdue], true)
                     || (bool) $m->latestPeriodState?->needs_decision
                     || ($m->deadline && $m->deadline->betweenIncluded($today, $soon))
-                    || $m->risk_level === RiskLevel::High;
+                    || $m->currentRiskLevel() === RiskLevel::High;
             })
             ->map(fn (Measure $m) => $this->measureSummary($m))
             ->values()->all();
@@ -114,8 +114,8 @@ class DashboardSummaryService
         $items = $measures->all();
 
         usort($items, function (Measure $a, Measure $b) {
-            $riskA = self::RISK_WEIGHT[$a->risk_level?->value] ?? 0;
-            $riskB = self::RISK_WEIGHT[$b->risk_level?->value] ?? 0;
+            $riskA = self::RISK_WEIGHT[$a->currentRiskLevel()?->value] ?? 0;
+            $riskB = self::RISK_WEIGHT[$b->currentRiskLevel()?->value] ?? 0;
             if ($riskA !== $riskB) {
                 return $riskB <=> $riskA;
             }
@@ -141,7 +141,7 @@ class DashboardSummaryService
             'responsible' => $measure->responsible?->name,
             'deadline' => $measure->deadline?->format('Y-m-d'),
             'percent' => $measure->percent,
-            'risk_level' => $measure->risk_level?->value,
+            'risk_level' => $measure->currentRiskLevel()?->value,
             'status' => $measure->currentStatus()->value,
             'problem' => $measure->latestPeriodState?->risk_text,
         ];

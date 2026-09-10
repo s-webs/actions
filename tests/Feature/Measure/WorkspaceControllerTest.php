@@ -112,7 +112,8 @@ test('the second stage stays locked and unreachable until the first is approved'
         ->get(route('measure.workspace'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('currentStage.id', $first->id)
-            ->where('stageList.1.status', 'locked'));
+            ->where('stageList.1.status', 'locked')
+            ->has('completedStages', 0));
 });
 
 test('approving the current stage opens the next one', function () {
@@ -130,13 +131,57 @@ test('approving the current stage opens the next one', function () {
     Evidence::factory()->create(['measure_id' => $measure->id, 'measure_stage_id' => $first->id, 'period_id' => $period->id]);
     $update->update(['review_state' => ReviewState::Submitted]);
 
-    $this->actingAs($admin, 'web')->post(route('approval.approve', $update), ['approved_percent' => 100])->assertRedirect();
+    $this->actingAs($admin, 'web')->post(route('approval.approve', $update))->assertRedirect();
 
     expect($measure->fresh()->currentStage()?->id)->toBe($second->id);
 
     $this->actingAs($credential, 'measure')
         ->get(route('measure.workspace'))
         ->assertInertia(fn (Assert $page) => $page->where('currentStage.id', $second->id));
+});
+
+test('a completed stage is sent as a read-only card payload with its report and documents', function () {
+    $measure = Measure::factory()->create();
+    $first = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 1, 'weight' => 50, 'title' => 'Подготовка']);
+    $second = MeasureStage::factory()->create(['measure_id' => $measure->id, 'order' => 2, 'weight' => 50]);
+    $credential = loginAsMeasure($measure);
+    $admin = adminUser();
+
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
+    $period = Period::current();
+
+    $update = StagePeriodUpdate::where('measure_stage_id', $first->id)->where('period_id', $period->id)->first();
+    $evidence = Evidence::factory()->create([
+        'measure_id' => $measure->id,
+        'measure_stage_id' => $first->id,
+        'period_id' => $period->id,
+        'title' => 'Протокол',
+        'path_or_url' => 'https://example.test/protocol.pdf',
+    ]);
+    $update->update([
+        'review_state' => ReviewState::Submitted,
+        'done_text' => 'Собраны данные',
+        'submitted_by_name' => 'Иванова А.С.',
+        'submitted_at' => now(),
+    ]);
+
+    $this->actingAs($admin, 'web')->post(route('approval.approve', $update))->assertRedirect();
+
+    $this->actingAs($credential, 'measure')
+        ->get(route('measure.workspace'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('currentStage.id', $second->id)
+            ->where('stageList.0.status', 'completed')
+            ->where('stageList.1.status', 'current')
+            ->has('completedStages', 1)
+            ->where('completedStages.0.id', $first->id)
+            ->where('completedStages.0.title', 'Подготовка')
+            ->where('completedStages.0.update.done_text', 'Собраны данные')
+            ->where('completedStages.0.update.approved_percent', 50)
+            ->where('completedStages.0.update.submitted_by_name', 'Иванова А.С.')
+            ->where('completedStages.0.evidences.0.id', $evidence->id)
+            ->where('completedStages.0.evidences.0.title', 'Протокол'));
 });
 
 test('rejecting the current stage does not advance to the next one', function () {
@@ -160,7 +205,7 @@ test('rejecting the current stage does not advance to the next one', function ()
 
 test('once every stage is approved the workspace shows completion instead of a form', function () {
     $measure = Measure::factory()->create();
-    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'weight' => 100]);
+    $stage = MeasureStage::factory()->create(['measure_id' => $measure->id, 'weight' => 95]);
     $credential = loginAsMeasure($measure);
     $admin = adminUser();
 
@@ -171,15 +216,36 @@ test('once every stage is approved the workspace shows completion instead of a f
     $update = StagePeriodUpdate::where('measure_stage_id', $stage->id)->where('period_id', $period->id)->first();
     Evidence::factory()->create(['measure_id' => $measure->id, 'measure_stage_id' => $stage->id, 'period_id' => $period->id]);
     $update->update(['review_state' => ReviewState::Submitted]);
-    $this->actingAs($admin, 'web')->post(route('approval.approve', $update), ['approved_percent' => 100]);
+    $this->actingAs($admin, 'web')->post(route('approval.approve', $update));
 
     $this->actingAs($credential, 'measure')
         ->get(route('measure.workspace'))
-        ->assertInertia(fn (Assert $page) => $page->where('currentStage', null));
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('currentStage', null)
+            ->has('completedStages', 1)
+            ->where('completedStages.0.id', $stage->id));
 
     $this->actingAs($credential, 'measure')
         ->patch(route('measure.workspace.update'), ['action' => 'save', 'measure_status' => 'done', 'needs_decision' => false])
         ->assertForbidden();
+});
+
+test('the executor cannot set done, overdue or at_risk from the workspace', function () {
+    $measure = Measure::factory()->create(['deadline' => now()->addMonths(6)]);
+    MeasureStage::factory()->create(['measure_id' => $measure->id]);
+    $credential = loginAsMeasure($measure);
+    confirmStages($credential);
+    $this->actingAs($credential, 'measure')->get(route('measure.workspace'));
+
+    foreach (['done', 'overdue', 'at_risk'] as $status) {
+        $this->actingAs($credential, 'measure')
+            ->patch(route('measure.workspace.update'), [
+                'action' => 'save',
+                'measure_status' => $status,
+                'needs_decision' => false,
+            ])
+            ->assertSessionHasErrors('measure_status');
+    }
 });
 
 test('the workspace update route is unreachable before the stage list is confirmed', function () {
@@ -376,6 +442,20 @@ test('a measure session can create a stage for its own measure', function () {
     expect($stage)->not->toBeNull()
         ->and($stage->title)->toBe('Сбор данных')
         ->and($stage->order)->toBe(1);
+});
+
+test('a measure session cannot set a stage weight of 100 percent', function () {
+    $measure = Measure::factory()->create();
+    $credential = loginAsMeasure($measure);
+
+    $this->actingAs($credential, 'measure')
+        ->post(route('measure.stages.store'), [
+            'title' => 'Финал',
+            'weight' => 100,
+        ])
+        ->assertSessionHasErrors('weight');
+
+    expect($measure->stages()->count())->toBe(0);
 });
 
 test('a measure session can edit and delete its own stage', function () {

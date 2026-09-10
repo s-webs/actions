@@ -14,7 +14,7 @@ class MeasureStageFactory extends Factory
             'order' => 1,
             'title' => $this->faker->sentence(3),
             'planned_date' => $this->faker->dateTimeBetween('now', '+6 months'),
-            'weight' => 100,
+            'weight' => 50,
         ];
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MeasureStatus;
+use App\Enums\RiskLevel;
 use App\Models\Measure;
 use App\Models\MeasurePeriodState;
 use App\Models\Period;
@@ -18,7 +19,7 @@ test('a measure past its deadline with no prior status is marked overdue', funct
 });
 
 test('a done measure past its deadline is left alone', function () {
-    $measure = Measure::factory()->create(['deadline' => now()->subDay()]);
+    $measure = Measure::factory()->create(['deadline' => now()->subDay(), 'percent' => 100]);
     $period = Period::current();
     MeasurePeriodState::factory()->create(['measure_id' => $measure->id, 'period_id' => $period->id, 'status' => MeasureStatus::Done]);
 
@@ -34,6 +35,18 @@ test('a measure not yet due is left alone', function () {
     $this->artisan('measures:mark-overdue');
 
     expect(MeasurePeriodState::where('measure_id', $measure->id)->exists())->toBeFalse();
+});
+
+test('a measure due in 10 days is persisted as at risk with medium risk', function () {
+    $measure = Measure::factory()->create(['deadline' => now()->addDays(10), 'percent' => 0]);
+
+    $this->artisan('measures:mark-overdue')->assertSuccessful();
+
+    $period = Period::current();
+    $state = MeasurePeriodState::where('measure_id', $measure->id)->where('period_id', $period->id)->first();
+
+    expect($state->status)->toBe(MeasureStatus::AtRisk)
+        ->and($measure->fresh()->risk_level)->toBe(RiskLevel::Medium);
 });
 
 test('marking overdue makes the plan registry SQL filter see it too, not just the live display', function () {

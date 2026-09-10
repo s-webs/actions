@@ -2,10 +2,13 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 
+import { StageDetailCard } from '@/components/stage-detail-card';
+import type { StageDetail, StageDetailEvidence, StageDetailUpdate } from '@/components/stage-detail-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +25,9 @@ interface StageRow {
     planned_date: string | null;
     weight: number;
     review_state: string | null;
+    update: StageDetailUpdate | null;
+    evidences: StageDetailEvidence[];
+    has_details: boolean;
 }
 
 interface MeasureRow {
@@ -112,11 +118,12 @@ function AddStageForm({ measureId }: { measureId: number }) {
                     id={`stage-weight-${measureId}`}
                     type="number"
                     min={1}
-                    max={100}
+                    max={95}
                     className="w-24"
                     value={data.weight}
                     onChange={(e) => setData('weight', e.target.value)}
                 />
+                <p className="text-muted-foreground text-xs">Максимум 95%. 100% ставит администратор после приёмки.</p>
                 {errors.weight && <p className="text-xs text-destructive">{errors.weight}</p>}
             </div>
             <Button type="submit" size="sm" disabled={processing}>
@@ -148,6 +155,19 @@ function StageManager({
     const allStagesApproved = stages.length > 0 && stages.every((s) => s.review_state === 'approved');
     const canAcceptWork = canManage && allStagesApproved && percent < 100;
     const { reviewState } = useLabels();
+    const [detailStage, setDetailStage] = useState<StageRow | null>(null);
+
+    function stageToDetail(stage: StageRow): StageDetail {
+        return {
+            id: stage.id,
+            order: stage.order,
+            title: stage.title,
+            planned_date: stage.planned_date,
+            weight: stage.weight,
+            update: stage.update,
+            evidences: stage.evidences,
+        };
+    }
 
     if (stages.length === 0 && !editable) {
         return <p className="text-muted-foreground text-sm">Этапы ещё не заведены исполнителем.</p>;
@@ -193,6 +213,7 @@ function StageManager({
                             <th className="pr-4">Плановая дата</th>
                             <th className="pr-4">Вес</th>
                             <th className="pr-4">Состояние проверки</th>
+                            <th className="pr-4">Детали</th>
                             {editable && <th></th>}
                         </tr>
                     </thead>
@@ -204,6 +225,13 @@ function StageManager({
                                 <td className="pr-4">{s.planned_date ?? '—'}</td>
                                 <td className="pr-4">{s.weight}%</td>
                                 <td className="pr-4">{reviewState(s.review_state)}</td>
+                                <td className="pr-4">
+                                    {s.has_details && (
+                                        <Button type="button" variant="ghost" size="sm" onClick={() => setDetailStage(s)}>
+                                            Детали
+                                        </Button>
+                                    )}
+                                </td>
                                 {editable && (
                                     <td>
                                         <Button
@@ -227,6 +255,15 @@ function StageManager({
                 </table>
             )}
             {editable && <AddStageForm measureId={measureId} />}
+
+            <Dialog open={detailStage !== null} onOpenChange={(open) => !open && setDetailStage(null)}>
+                <DialogContent className="max-h-[90vh] max-w-lg min-w-0 overflow-y-auto overflow-x-hidden">
+                    <DialogTitle className="sr-only">
+                        {detailStage ? `Этап ${detailStage.order}. ${detailStage.title}` : 'Детали этапа'}
+                    </DialogTitle>
+                    {detailStage && <StageDetailCard stage={stageToDetail(detailStage)} />}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

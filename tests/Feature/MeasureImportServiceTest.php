@@ -28,7 +28,7 @@ test('importing the real Action Plan file creates 51 measures with generated cre
     expect($measure1->title)->toContain('Утверждение плана')
         ->and($measure1->risk_level)->toBe(RiskLevel::High)
         ->and($measure1->deadline->format('Y-m-d'))->toBe('2026-09-05')
-        ->and($measure1->control_date)->not->toBeNull()
+        ->and($measure1->getAttributes())->not->toHaveKey('control_date')
         ->and($measure1->responsible->name)->toBe('Проректор по АР')
         ->and($measure1->credential->login)->toBe('M-01');
 

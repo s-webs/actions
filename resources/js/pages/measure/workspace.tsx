@@ -9,26 +9,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { EvidenceList, StageDetailCard } from '@/components/stage-detail-card';
+import type { StageDetail, StageDetailEvidence } from '@/components/stage-detail-card';
 import { useLabels } from '@/lib/labels';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
+type ExecutorStatus = 'not_started' | 'in_progress';
 type ReviewState = 'draft' | 'submitted' | 'approved' | 'rejected' | 'rework';
 type StageStatus = 'current' | 'completed' | 'locked';
 
-interface StageEvidence {
-    id: number;
-    title: string | null;
-    type: 'file' | 'link';
-    path_or_url: string;
-}
-
-interface StageUpdate {
-    id: number;
-    done_text: string | null;
-    review_state: ReviewState;
-    review_comment: string | null;
-    approved_percent: number | null;
-}
+type StageEvidence = StageDetailEvidence;
+type CurrentStage = StageDetail;
 
 interface StageListItem {
     id: number;
@@ -37,16 +28,6 @@ interface StageListItem {
     planned_date: string | null;
     weight: number;
     status: StageStatus | null;
-}
-
-interface CurrentStage {
-    id: number;
-    order: number;
-    title: string;
-    planned_date: string | null;
-    weight: number;
-    update: StageUpdate | null;
-    evidences: StageEvidence[];
 }
 
 interface HistoryEntry {
@@ -78,13 +59,16 @@ interface WorkspaceProps {
         percent: number;
     };
     period: { id: number; month: string };
-    measureState: { status: MeasureStatus; risk_text: string | null; needs_decision: boolean; locked: boolean };
+    measureState: { status: ExecutorStatus; risk_text: string | null; needs_decision: boolean; locked: boolean };
     stagesConfirmed: boolean;
     stageList: StageListItem[];
     currentStage: CurrentStage | null;
+    completedStages: CurrentStage[];
     history: HistoryEntry[];
     changeLog: ChangeLogEntry[];
 }
+
+const EXECUTOR_STATUSES: ExecutorStatus[] = ['not_started', 'in_progress'];
 
 const EVENT_LABELS: Record<ChangeLogEntry['event'], string> = {
     created: 'Создано',
@@ -170,11 +154,12 @@ function StageEditForm({ stage, onDone }: { stage: { id: number; title: string; 
                 <Input
                     type="number"
                     min={1}
-                    max={100}
+                    max={95}
                     className="w-24"
                     value={data.weight}
                     onChange={(e) => setData('weight', e.target.value)}
                 />
+                <p className="text-muted-foreground text-xs">Максимум 95%. 100% ставит администратор после приёмки.</p>
                 {errors.weight && <p className="text-xs text-destructive">{errors.weight}</p>}
             </div>
             <Button type="submit" size="sm" disabled={processing}>
@@ -223,11 +208,12 @@ function AddStageForm() {
                     id="new-stage-weight"
                     type="number"
                     min={1}
-                    max={100}
+                    max={95}
                     className="w-24"
                     value={data.weight}
                     onChange={(e) => setData('weight', e.target.value)}
                 />
+                <p className="text-muted-foreground text-xs">Максимум 95%. 100% ставит администратор после приёмки.</p>
                 {errors.weight && <p className="text-xs text-destructive">{errors.weight}</p>}
             </div>
             <Button type="submit" size="sm" disabled={processing}>
@@ -307,31 +293,53 @@ function StageSetup({ stages }: { stages: StageListItem[] }) {
     );
 }
 
-function StageSidebar({ stages }: { stages: StageListItem[] }) {
+function StageSidebar({
+    stages,
+    viewedStageId,
+    onSelect,
+}: {
+    stages: StageListItem[];
+    viewedStageId: number | null;
+    onSelect: (id: number) => void;
+}) {
     return (
         <aside className="flex w-full shrink-0 flex-col gap-2 sm:w-56">
             <h2 className="text-muted-foreground text-sm font-medium">Этапы</h2>
             <ul className="flex flex-col gap-1">
-                {stages.map((s) => (
-                    <li
-                        key={s.id}
-                        className={`flex items-start gap-2 rounded-md border p-2 text-sm ${
-                            s.status === 'current' ? 'border-primary bg-primary/5' : ''
-                        }`}
-                    >
-                        {s.status === 'completed' && <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />}
-                        {s.status === 'locked' && <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
-                        {s.status === 'current' && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />}
-                        <div className="flex flex-col">
-                            <span className={s.status === 'locked' ? 'text-muted-foreground' : 'font-medium'}>
-                                {s.order}. {s.title}
-                            </span>
-                            <span className="text-muted-foreground text-xs">
-                                {s.planned_date ?? '—'} · {s.weight}%
-                            </span>
-                        </div>
-                    </li>
-                ))}
+                {stages.map((s) => {
+                    const clickable = s.status === 'current' || s.status === 'completed';
+                    const selected = viewedStageId === s.id;
+                    const className = `flex w-full items-start gap-2 rounded-md border p-2 text-left text-sm ${
+                        selected ? 'border-primary bg-primary/5' : ''
+                    }`;
+                    const body = (
+                        <>
+                            {s.status === 'completed' && <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />}
+                            {s.status === 'locked' && <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
+                            {s.status === 'current' && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                            <div className="flex flex-col">
+                                <span className={s.status === 'locked' ? 'text-muted-foreground' : 'font-medium'}>
+                                    {s.order}. {s.title}
+                                </span>
+                                <span className="text-muted-foreground text-xs">
+                                    {s.planned_date ?? '—'} · {s.weight}%
+                                </span>
+                            </div>
+                        </>
+                    );
+
+                    return (
+                        <li key={s.id}>
+                            {clickable ? (
+                                <button type="button" onClick={() => onSelect(s.id)} className={className}>
+                                    {body}
+                                </button>
+                            ) : (
+                                <div className={`${className} cursor-default`}>{body}</div>
+                            )}
+                        </li>
+                    );
+                })}
             </ul>
         </aside>
     );
@@ -341,8 +349,18 @@ function StageSidebar({ stages }: { stages: StageListItem[] }) {
  * Рабочее место мероприятия (guard `measure`) — task-007, task-020
  * (последовательное заполнение), [[Функциональные требования#4.7 Рабочее место мероприятия]].
  */
-export default function Workspace({ measure, period, measureState, stagesConfirmed, stageList, currentStage, history, changeLog }: WorkspaceProps) {
-    const { measureStatus, reviewState: reviewStateLabel, labels } = useLabels();
+export default function Workspace({
+    measure,
+    period,
+    measureState,
+    stagesConfirmed,
+    stageList,
+    currentStage,
+    completedStages = [],
+    history,
+    changeLog,
+}: WorkspaceProps) {
+    const { measureStatus, reviewState: reviewStateLabel } = useLabels();
     const { data, setData, patch, transform, processing, errors } = useForm({
         measure_status: measureState.status,
         risk_text: measureState.risk_text ?? '',
@@ -354,6 +372,10 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
     });
 
     const locked = measureState.locked;
+    const lastCompletedId = completedStages.at(-1)?.id ?? null;
+    const [viewedStageId, setViewedStageId] = useState<number | null>(currentStage?.id ?? lastCompletedId);
+    const viewedCompleted = completedStages.find((s) => s.id === viewedStageId) ?? null;
+    const viewingCurrent = currentStage !== null && viewedStageId === currentStage.id;
 
     function clearEvidenceFields() {
         setData((prev) => ({ ...prev, files: [], evidence_url: '' }));
@@ -396,22 +418,25 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                 <StageSetup stages={stageList} />
             ) : (
                 <div className="flex flex-col gap-6 sm:flex-row">
-                    <StageSidebar stages={stageList} />
+                    <StageSidebar stages={stageList} viewedStageId={viewedStageId} onSelect={setViewedStageId} />
 
                     <div className="flex flex-1 flex-col gap-8">
-                        {locked && (
+                        {viewingCurrent && locked && (
                             <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
                                 Этап подан на проверку — редактирование заблокировано до решения администратора.
                             </div>
                         )}
 
-                        {!currentStage ? (
+                        {!currentStage && (
                             <section className="rounded-lg border border-green-300 bg-green-50 p-4 text-sm text-green-900">
                                 Все этапы утверждены — мероприятие выполнено на {measure.percent}%.
                             </section>
-                        ) : (
-                            <>
-                                <section className="flex flex-col gap-4 rounded-lg border p-4">
+                        )}
+
+                        {viewedCompleted && <StageDetailCard stage={viewedCompleted} />}
+
+                        {viewingCurrent && currentStage && (
+                            <section className="flex flex-col gap-4 rounded-lg border p-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="font-medium">
                                             Этап {currentStage.order}. {currentStage.title}
@@ -432,14 +457,14 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                         <Label>Статус</Label>
                                         <Select
                                             value={data.measure_status}
-                                            onValueChange={(v) => setData('measure_status', v as MeasureStatus)}
+                                            onValueChange={(v) => setData('measure_status', v as ExecutorStatus)}
                                             disabled={locked}
                                         >
                                             <SelectTrigger className="w-64">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {(Object.keys(labels.measure_status) as MeasureStatus[]).map((s) => (
+                                                {EXECUTOR_STATUSES.map((s) => (
                                                     <SelectItem key={s} value={s}>
                                                         {measureStatus(s)}
                                                     </SelectItem>
@@ -478,22 +503,7 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
 
                                     <div className="flex flex-col gap-2">
                                         <Label>Подтверждающие документы</Label>
-                                        {currentStage.evidences.length > 0 && (
-                                            <ul className="list-disc pl-5 text-sm">
-                                                {currentStage.evidences.map((e) => (
-                                                    <li key={e.id}>
-                                                        <a
-                                                            href={e.path_or_url}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="text-primary underline-offset-4 hover:underline"
-                                                        >
-                                                            {e.title ?? e.path_or_url}
-                                                        </a>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
+                                        {currentStage.evidences.length > 0 && <EvidenceList evidences={currentStage.evidences} />}
                                         {!locked && (
                                             <div className="flex flex-col gap-1">
                                                 <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -549,7 +559,6 @@ export default function Workspace({ measure, period, measureState, stagesConfirm
                                         </Button>
                                     </div>
                                 </section>
-                            </>
                         )}
 
                         {history.length > 0 && (

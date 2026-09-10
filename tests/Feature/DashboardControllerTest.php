@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\MeasureStatus;
-use App\Enums\RiskLevel;
 use App\Models\Direction;
 use App\Models\Measure;
 use App\Models\MeasurePeriodState;
@@ -24,10 +23,10 @@ function measureWithStatus(Direction $direction, MeasureStatus $status, array $a
 
 test('kpis count measures by their current status', function () {
     $direction = Direction::factory()->create(['in_summary' => true]);
-    measureWithStatus($direction, MeasureStatus::Done);
-    measureWithStatus($direction, MeasureStatus::InProgress);
-    measureWithStatus($direction, MeasureStatus::AtRisk);
-    measureWithStatus($direction, MeasureStatus::NotStarted);
+    measureWithStatus($direction, MeasureStatus::Done, ['percent' => 100, 'deadline' => now()->addMonths(6)]);
+    measureWithStatus($direction, MeasureStatus::InProgress, ['deadline' => now()->addMonths(6)]);
+    Measure::factory()->create(['direction_id' => $direction->id, 'deadline' => now()->addDays(10)]);
+    measureWithStatus($direction, MeasureStatus::NotStarted, ['deadline' => now()->addMonths(6)]);
 
     $this->actingAs($this->user)
         ->get(route('dashboard'))
@@ -48,7 +47,7 @@ test('a measure past its deadline shows as overdue even without a persisted stat
 
 test('a done measure past its deadline is not counted as overdue', function () {
     $direction = Direction::factory()->create();
-    measureWithStatus($direction, MeasureStatus::Done, ['deadline' => now()->subDay()]);
+    measureWithStatus($direction, MeasureStatus::Done, ['deadline' => now()->subDay(), 'percent' => 100]);
 
     $this->actingAs($this->user)
         ->get(route('dashboard'))
@@ -70,43 +69,44 @@ test('direction summary only includes directions flagged for the dashboard', fun
 test('needs-decision picks up high risk, at-risk status, needs_decision flag, and near deadlines independently', function () {
     $direction = Direction::factory()->create();
 
-    $highRisk = Measure::factory()->create(['direction_id' => $direction->id, 'risk_level' => RiskLevel::High, 'deadline' => now()->addMonths(6)]);
-    $atRisk = measureWithStatus($direction, MeasureStatus::AtRisk, ['deadline' => now()->addMonths(6)]);
-    $nearDeadline = Measure::factory()->create(['direction_id' => $direction->id, 'deadline' => now()->addDays(10)]);
-    $fine = Measure::factory()->create(['direction_id' => $direction->id, 'deadline' => now()->addMonths(6), 'risk_level' => RiskLevel::Low]);
+    $highRisk = Measure::factory()->create(['direction_id' => $direction->id, 'deadline' => now()->addDays(5)]);
+    $atRisk = Measure::factory()->create(['direction_id' => $direction->id, 'deadline' => now()->addDays(10)]);
+    $flagged = measureWithStatus($direction, MeasureStatus::InProgress, ['deadline' => now()->addMonths(6)]);
+    MeasurePeriodState::query()->where('measure_id', $flagged->id)->update(['needs_decision' => true]);
+    $nearDeadline = Measure::factory()->create(['direction_id' => $direction->id, 'deadline' => now()->addDays(25)]);
+    $fine = Measure::factory()->create(['direction_id' => $direction->id, 'deadline' => now()->addMonths(6)]);
 
     $this->actingAs($this->user)
         ->get(route('dashboard'))
-        ->assertInertia(function (Assert $page) use ($highRisk, $atRisk, $nearDeadline, $fine) {
-            $page->where('needsDecision', function ($rows) use ($highRisk, $atRisk, $nearDeadline, $fine) {
+        ->assertInertia(function (Assert $page) use ($highRisk, $atRisk, $flagged, $nearDeadline, $fine) {
+            $page->where('needsDecision', function ($rows) use ($highRisk, $atRisk, $flagged, $nearDeadline, $fine) {
                 $ids = collect($rows)->pluck('id');
 
                 return $ids->contains($highRisk->id)
                     && $ids->contains($atRisk->id)
+                    && $ids->contains($flagged->id)
                     && $ids->contains($nearDeadline->id)
                     && ! $ids->contains($fine->id);
             });
         });
 });
 
-test('top risks ranks high risk above a merely near-deadline measure', function () {
+test('top risks ranks a nearer high-risk deadline above a medium-risk one', function () {
     $direction = Direction::factory()->create();
     $highRisk = Measure::factory()->create([
         'direction_id' => $direction->id,
-        'risk_level' => RiskLevel::High,
-        'deadline' => now()->addMonths(3),
+        'deadline' => now()->addDays(5),
         'percent' => 80,
     ]);
-    $lowRiskSoon = Measure::factory()->create([
+    $mediumRisk = Measure::factory()->create([
         'direction_id' => $direction->id,
-        'risk_level' => RiskLevel::Low,
-        'deadline' => now()->addDays(5),
+        'deadline' => now()->addDays(10),
         'percent' => 10,
     ]);
 
     $this->actingAs($this->user)
         ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page->where('topRisks.0.id', $highRisk->id)->where('topRisks.1.id', $lowRiskSoon->id));
+        ->assertInertia(fn (Assert $page) => $page->where('topRisks.0.id', $highRisk->id)->where('topRisks.1.id', $mediumRisk->id));
 });
 
 test('a measure guard session cannot reach the dashboard', function () {

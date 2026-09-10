@@ -28,7 +28,7 @@ class PlanExport implements FromCollection, WithHeadings, WithMapping
 
     public function collection(): Collection
     {
-        return Measure::with(['direction', 'responsible', 'stages'])->orderBy('number')->get();
+        return Measure::with(['direction', 'responsible', 'stages', 'latestPeriodState'])->orderBy('number')->get();
     }
 
     public function headings(): array
@@ -36,7 +36,7 @@ class PlanExport implements FromCollection, WithHeadings, WithMapping
         return [
             '№', 'Направление', 'Мероприятие', 'Ответственный', 'Срок',
             'Промежуточный контроль', 'Где заслушивается', 'Уровень риска',
-            'Контрольная дата', 'Статус', '%', 'Следующий шаг', 'Комментарии',
+            'Статус', '%', 'Следующий шаг', 'Комментарии',
         ];
     }
 
@@ -52,8 +52,7 @@ class PlanExport implements FromCollection, WithHeadings, WithMapping
             $measure->deadline?->format('d.m.Y'),
             $measure->interim_monitoring_text,
             $measure->reviewed_by,
-            $measure->risk_level?->value,
-            $measure->control_date?->format('d.m.Y'),
+            $measure->currentRiskLevel()?->value,
             self::STATUS_LABELS[$measure->currentStatus()->value],
             $measure->percent,
             $nextStage?->title,

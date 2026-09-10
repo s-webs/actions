@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Plan;
 
-use App\Enums\RiskLevel;
 use App\Enums\MeasureStatus;
 use App\Enums\ReviewState;
 use App\Http\Controllers\Controller;
@@ -16,7 +15,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -36,10 +34,6 @@ class MeasureController extends Controller
         return Inertia::render('plan/create', [
             'directions' => Direction::orderBy('number')->get(['id', 'number', 'name']),
             'nextNumber' => $nextNumber > 0 ? $nextNumber : 1,
-            'riskLevels' => collect(RiskLevel::cases())->map(fn (RiskLevel $level) => [
-                'value' => $level->value,
-                'label' => $level->label(),
-            ]),
             'credential' => $request->session()->get('credential'),
         ]);
     }
@@ -59,8 +53,6 @@ class MeasureController extends Controller
         $request->merge([
             'responsible' => $request->filled('responsible') ? trim((string) $request->input('responsible')) : null,
             'deadline' => $request->filled('deadline') ? $request->input('deadline') : null,
-            'control_date' => $request->filled('control_date') ? $request->input('control_date') : null,
-            'risk_level' => $request->filled('risk_level') ? $request->input('risk_level') : null,
             'stages' => $stages,
         ]);
 
@@ -70,12 +62,10 @@ class MeasureController extends Controller
             'direction_id' => ['required', 'exists:directions,id'],
             'responsible' => ['nullable', 'string', 'max:255'],
             'deadline' => ['nullable', 'date'],
-            'control_date' => ['nullable', 'date'],
-            'risk_level' => ['nullable', Rule::enum(RiskLevel::class)],
             'stages' => ['nullable', 'array'],
             'stages.*.title' => ['required', 'string', 'max:255'],
             'stages.*.planned_date' => ['nullable', 'date'],
-            'stages.*.weight' => ['required', 'integer', 'min:1', 'max:100'],
+            'stages.*.weight' => ['required', 'integer', 'min:1', 'max:95'],
         ]);
 
         $credential = DB::transaction(function () use ($validated) {
@@ -90,8 +80,6 @@ class MeasureController extends Controller
                 'direction_id' => $validated['direction_id'],
                 'responsible_id' => $responsible?->id,
                 'deadline' => $validated['deadline'] ?? null,
-                'control_date' => $validated['control_date'] ?? null,
-                'risk_level' => $validated['risk_level'] ?? null,
             ]);
 
             foreach ($validated['stages'] ?? [] as $index => $stage) {
