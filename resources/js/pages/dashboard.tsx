@@ -2,6 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { useLabels } from '@/lib/labels';
@@ -82,9 +83,11 @@ export default function Dashboard({ kpis, statusBreakdown, directionSummary, upc
 
             <div className="flex flex-col gap-6 p-6">
                 <div className="flex justify-end">
-                    <a href={route('reports.dashboard-pdf')} target="_blank" rel="noreferrer" className="text-sm text-primary underline-offset-4 hover:underline">
-                        Экспорт в PDF
-                    </a>
+                    <Button asChild size="sm">
+                        <a href={route('reports.dashboard-pdf')} target="_blank" rel="noreferrer">
+                            Экспорт в PDF
+                        </a>
+                    </Button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
@@ -163,9 +166,9 @@ export default function Dashboard({ kpis, statusBreakdown, directionSummary, upc
                         </CardHeader>
                         <CardContent>
                             <p className="text-4xl font-semibold">{kpis.stages_to_review}</p>
-                            <Link href={route('approval.index')} className="text-sm text-primary underline-offset-4 hover:underline">
-                                Перейти к проверке →
-                            </Link>
+                            <Button asChild size="sm" className="mt-2">
+                                <Link href={route('approval.index')}>Перейти к проверке →</Link>
+                            </Button>
                         </CardContent>
                     </Card>
                 </div>

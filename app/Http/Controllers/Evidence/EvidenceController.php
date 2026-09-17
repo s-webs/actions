@@ -18,33 +18,47 @@ use Inertia\Response;
  */
 class EvidenceController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(): Response
     {
-        $query = Evidence::query()->with(['measure', 'stage', 'period']);
-
-        $query
-            ->when($request->filled('measure_id'), fn ($q) => $q->where('measure_id', $request->integer('measure_id')))
-            ->when($request->filled('period_id'), fn ($q) => $q->where('period_id', $request->integer('period_id')))
-            ->when($request->filled('form'), fn ($q) => $q->where('form', $request->string('form')));
-
-        $evidences = $query->latest()->paginate(20)->withQueryString();
-
-        $evidences->getCollection()->transform(fn (Evidence $e) => [
-            'id' => $e->id,
-            'title' => $e->title,
-            'form' => $e->form,
-            'type' => $e->type->value,
-            'url' => $e->publicUrl(),
-            'measure' => ['id' => $e->measure->id, 'number' => $e->measure->number, 'title' => $e->measure->title],
-            'stage_title' => $e->stage?->title,
-            'period' => $e->period?->month->format('Y-m'),
-            'uploaded_at' => $e->created_at->format('Y-m-d H:i'),
-        ]);
+        $measures = Measure::query()
+            ->orderBy('number')
+            ->withCount('evidences')
+            ->get(['id', 'number', 'title']);
 
         return Inertia::render('evidence/index', [
-            'evidences' => $evidences,
-            'measures' => Measure::orderBy('number')->get(['id', 'number', 'title']),
-            'filters' => $request->only(['measure_id', 'period_id', 'form']),
+            'measures' => $measures,
+        ]);
+    }
+
+    public function show(Request $request, Measure $measure): Response
+    {
+        $groups = $measure->evidences()
+            ->with(['stage', 'period'])
+            ->latest()
+            ->get()
+            ->groupBy(fn (Evidence $e) => $e->created_at->toDateString())
+            ->map(fn ($items, $date) => [
+                'date' => $date,
+                'label' => $items->first()->created_at->format('d.m.Y'),
+                'files' => $items->map(fn (Evidence $e) => [
+                    'id' => $e->id,
+                    'title' => $e->title,
+                    'type' => $e->type->value,
+                    'url' => $e->publicUrl(),
+                    'stage_title' => $e->stage?->title,
+                    'period' => $e->period?->month->format('Y-m'),
+                    'uploaded_at' => $e->created_at->format('Y-m-d H:i'),
+                ])->values(),
+            ])
+            ->values();
+
+        return Inertia::render('evidence/show', [
+            'measure' => [
+                'id' => $measure->id,
+                'number' => $measure->number,
+                'title' => $measure->title,
+            ],
+            'groups' => $groups,
             'canDelete' => $request->user()->hasAnyRole(['administrator', 'developer']),
         ]);
     }

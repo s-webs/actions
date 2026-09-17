@@ -8,5 +8,6 @@ use Illuminate\Support\Facades\Route;
  */
 Route::middleware('auth:web')->group(function () {
     Route::get('evidence', [EvidenceController::class, 'index'])->name('evidence.index');
+    Route::get('evidence/{measure}', [EvidenceController::class, 'show'])->name('evidence.show');
     Route::delete('evidence/{evidence}', [EvidenceController::class, 'destroy'])->name('evidence.destroy');
 });

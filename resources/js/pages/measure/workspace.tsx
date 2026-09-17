@@ -97,7 +97,7 @@ function ChangeLogCard({ entry }: { entry: ChangeLogEntry }) {
     const fields = Array.from(new Set([...Object.keys(entry.old_values ?? {}), ...Object.keys(entry.new_values ?? {})]));
 
     return (
-        <div className="rounded-lg border p-3 text-sm">
+        <div className="rounded-lg border bg-card p-3 text-sm">
             <div className="flex items-center justify-between">
                 <span className="font-medium">
                     {entry.model} · {EVENT_LABELS[entry.event]}
@@ -235,7 +235,7 @@ function StageSetup({ stages }: { stages: StageListItem[] }) {
     }
 
     return (
-        <section className="flex flex-col gap-4 rounded-lg border p-4">
+        <section className="flex flex-col gap-4 rounded-lg border bg-card p-4">
             <h2 className="font-medium">Этапы мероприятия</h2>
             <p className="text-muted-foreground text-sm">
                 Добавьте все этапы мероприятия, затем нажмите «Утвердить этапы» — после этого состав и веса менять будет нельзя, а
@@ -247,7 +247,7 @@ function StageSetup({ stages }: { stages: StageListItem[] }) {
             ) : (
                 <ul className="flex flex-col gap-2">
                     {stages.map((s) => (
-                        <li key={s.id} className="rounded-md border p-3">
+                        <li key={s.id} className="rounded-md border bg-card p-3">
                             {editingId === s.id ? (
                                 <StageEditForm stage={s} onDone={() => setEditingId(null)} />
                             ) : (
@@ -309,8 +309,8 @@ function StageSidebar({
                 {stages.map((s) => {
                     const clickable = s.status === 'current' || s.status === 'completed';
                     const selected = viewedStageId === s.id;
-                    const className = `flex w-full items-start gap-2 rounded-md border p-2 text-left text-sm ${
-                        selected ? 'border-primary bg-primary/5' : ''
+                    const className = `flex w-full items-start gap-2 rounded-md border bg-card p-2 text-left text-sm ${
+                        selected ? 'border-primary' : ''
                     }`;
                     const body = (
                         <>
@@ -436,7 +436,7 @@ export default function Workspace({
                         {viewedCompleted && <StageDetailCard stage={viewedCompleted} />}
 
                         {viewingCurrent && currentStage && (
-                            <section className="flex flex-col gap-4 rounded-lg border p-4">
+                            <section className="flex flex-col gap-4 rounded-lg border bg-card p-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="font-medium">
                                             Этап {currentStage.order}. {currentStage.title}
@@ -562,7 +562,7 @@ export default function Workspace({
                         )}
 
                         {history.length > 0 && (
-                            <section className="flex flex-col gap-3 rounded-lg border p-4">
+                            <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
                                 <h2 className="font-medium">Лента результатов проверки</h2>
                                 <ul className="flex flex-col gap-2 text-sm">
                                     {history.map((h) => (
@@ -577,7 +577,7 @@ export default function Workspace({
                             </section>
                         )}
 
-                        <section className="flex flex-col gap-3 rounded-lg border p-4">
+                        <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
                             <h2 className="font-medium">Все изменения</h2>
                             {changeLog.length === 0 ? (
                                 <p className="text-muted-foreground text-sm">Изменений пока нет.</p>

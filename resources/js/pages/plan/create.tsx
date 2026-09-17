@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
 
 interface CredentialFlash {
     measure_number: number;
@@ -26,6 +27,11 @@ interface PlanCreateProps {
     nextNumber: number;
     credential: CredentialFlash | null;
 }
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'План', href: '/plan' },
+    { title: 'Новое мероприятие', href: '/plan/create' },
+];
 
 /**
  * Ручное создание одного мероприятия — дополнение к импорту Excel.
@@ -68,19 +74,19 @@ export default function PlanCreate({ directions, nextNumber, credential }: PlanC
     }
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Новое мероприятие" />
 
             <div className="flex w-full flex-col gap-6 p-6">
                 <div className="flex items-center justify-between gap-4">
                     <h1 className="text-xl font-medium">Новое мероприятие</h1>
-                    <Link href={route('plan.index')} className="text-sm text-primary underline-offset-4 hover:underline">
-                        К реестру
-                    </Link>
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href={route('plan.index')}>К реестру</Link>
+                    </Button>
                 </div>
 
                 {credential && (
-                    <div className="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+                    <div className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-sm">
                         <p className="font-medium">
                             Мероприятие №{credential.measure_number} создано. Учётные данные показываются один раз —
                             сохраните их сейчас:
@@ -94,7 +100,7 @@ export default function PlanCreate({ directions, nextNumber, credential }: PlanC
                     </div>
                 )}
 
-                <form className="flex flex-col gap-8" onSubmit={submit}>
+                <form className="flex flex-col gap-8 rounded-lg border bg-card p-6" onSubmit={submit}>
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <div className="grid gap-2">
                             <Label htmlFor="number">№</Label>
@@ -172,7 +178,7 @@ export default function PlanCreate({ directions, nextNumber, credential }: PlanC
                         )}
 
                         {data.stages.map((stage, index) => (
-                            <div key={index} className="grid items-end gap-3 rounded-lg border p-4 md:grid-cols-[1fr_10rem_6rem_auto]">
+                            <div key={index} className="grid items-end gap-3 rounded-lg border bg-card p-4 md:grid-cols-[1fr_10rem_6rem_auto]">
                                 <div className="grid gap-2">
                                     <Label htmlFor={`stage-title-${index}`}>Название этапа</Label>
                                     <Input

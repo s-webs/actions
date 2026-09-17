@@ -38,12 +38,12 @@ export default function DirectionsCreate({ nextNumber }: DirectionsCreateProps) 
             <div className="mx-auto flex w-full max-w-xl flex-col gap-6 p-6">
                 <div className="flex items-center justify-between gap-4">
                     <h1 className="text-xl font-medium">Новое направление</h1>
-                    <Link href={route('directions.index')} className="text-sm text-primary underline-offset-4 hover:underline">
-                        К списку
-                    </Link>
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href={route('directions.index')}>К списку</Link>
+                    </Button>
                 </div>
 
-                <form className="flex flex-col gap-4" onSubmit={submit}>
+                <form className="flex flex-col gap-4 rounded-lg border bg-card p-6" onSubmit={submit}>
                     <div className="grid gap-2">
                         <Label htmlFor="number">№</Label>
                         <Input

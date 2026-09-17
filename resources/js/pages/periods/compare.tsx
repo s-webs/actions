@@ -22,7 +22,10 @@ interface CompareProps {
     comparison: ComparisonRow[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Сравнение периодов', href: '/periods/compare' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Закрытие периода', href: '/periods' },
+    { title: 'Сравнение периодов', href: '/periods/compare' },
+];
 
 /**
  * Сравнение двух закрытых периодов — task-017,
@@ -77,6 +80,7 @@ export default function PeriodsCompare({ availablePeriods, fromId, toId, compari
                             </div>
                         </div>
 
+                        <div className="overflow-x-auto rounded-lg border bg-card">
                         <table className="w-full text-left text-sm">
                             <thead className="bg-muted/50">
                                 <tr>
@@ -102,6 +106,7 @@ export default function PeriodsCompare({ availablePeriods, fromId, toId, compari
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </>
                 )}
             </div>

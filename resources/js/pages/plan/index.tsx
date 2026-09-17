@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { useLabels } from '@/lib/labels';
+import { type BreadcrumbItem } from '@/types';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
 type RiskLevel = 'high' | 'medium' | 'low';
@@ -73,6 +74,8 @@ const STATUS_VARIANT: Record<MeasureStatus, 'secondary' | 'default' | 'destructi
 };
 
 const ALL = '__all__';
+
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'План', href: '/plan' }];
 
 function AddStageForm({ measureId }: { measureId: number }) {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -312,25 +315,25 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
     }
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="План" />
 
             <div className="flex flex-col gap-6 p-6">
                 <div className="flex items-center justify-between">
                     <h1 className="text-xl font-medium">План: реестр мероприятий</h1>
-                    <div className="flex gap-4">
+                    <div className="flex gap-2">
                         {canCreate && (
-                            <Link href={route('plan.create')} className="text-sm text-primary underline-offset-4 hover:underline">
-                                Добавить мероприятие
-                            </Link>
+                            <Button asChild size="sm">
+                                <Link href={route('plan.create')}>Добавить мероприятие</Link>
+                            </Button>
                         )}
-                        <a href={route('reports.plan-xlsx')} className="text-sm text-primary underline-offset-4 hover:underline">
-                            Экспорт в xlsx
-                        </a>
+                        <Button asChild size="sm">
+                            <a href={route('reports.plan-xlsx')}>Экспорт в xlsx</a>
+                        </Button>
                         {canImport && (
-                            <Link href={route('plan.import')} className="text-sm text-primary underline-offset-4 hover:underline">
-                                Импортировать из Excel
-                            </Link>
+                            <Button asChild size="sm">
+                                <Link href={route('plan.import')}>Импортировать из Excel</Link>
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -445,7 +448,7 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
                     </Button>
                 </form>
 
-                <div className="overflow-x-auto rounded-lg border">
+                <div className="overflow-x-auto rounded-lg border bg-card">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-muted/50">
                             <tr>

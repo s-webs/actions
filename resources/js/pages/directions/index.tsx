@@ -31,7 +31,7 @@ export default function DirectionsIndex({ directions }: DirectionsIndexProps) {
                     </Button>
                 </div>
 
-                <div className="overflow-x-auto rounded-lg border">
+                <div className="overflow-x-auto rounded-lg border bg-card">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-muted/50">
                             <tr>

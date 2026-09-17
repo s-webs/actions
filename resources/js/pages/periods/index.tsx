@@ -34,7 +34,7 @@ export default function PeriodsIndex({ period, measureCount, unreviewedCount, un
             <div className="flex flex-col gap-6 p-6">
                 <h1 className="text-xl font-medium">Закрытие отчётного периода</h1>
 
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                     <p>
                         Текущий период: <strong>{period.month}</strong> —{' '}
                         <Badge variant={period.state === 'open' ? 'outline' : 'secondary'}>{period.state === 'open' ? 'открыт' : 'закрыт'}</Badge>
@@ -73,9 +73,9 @@ export default function PeriodsIndex({ period, measureCount, unreviewedCount, un
                         <div className="flex items-center justify-between">
                             <h2 className="font-medium">Архив закрытых периодов</h2>
                             {recentSnapshots.length >= 2 && (
-                                <a href={route('periods.compare')} className="text-sm text-primary underline-offset-4 hover:underline">
-                                    Сравнить периоды →
-                                </a>
+                                <Button asChild size="sm">
+                                    <a href={route('periods.compare')}>Сравнить периоды →</a>
+                                </Button>
                             )}
                         </div>
                         <ul className="text-muted-foreground mt-2 flex flex-wrap gap-2 text-sm">

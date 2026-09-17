@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
 
 interface ImportCredential {
     measure_number: number;
@@ -25,6 +26,11 @@ interface ImportPageProps {
     report: ImportReport | null;
 }
 
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'План', href: '/plan' },
+    { title: 'Импорт', href: '/plan/import' },
+];
+
 /**
  * Минимальный экран импорта листа «План» (task-005). Полноценный реестр мероприятий
  * появится в task-006 — [[Функциональные требования#4.1 Модуль «План» — реестр мероприятий]].
@@ -40,13 +46,13 @@ export default function PlanImport({ report }: ImportPageProps) {
     };
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Импорт плана" />
 
             <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
                 <h1 className="text-xl font-medium">Импорт плана из Excel</h1>
 
-                <form className="flex flex-col gap-4" onSubmit={submit}>
+                <form className="flex flex-col gap-4 rounded-lg border bg-card p-6" onSubmit={submit}>
                     <div className="grid gap-2">
                         <Label htmlFor="file">Файл (xlsx)</Label>
                         <Input
@@ -65,7 +71,7 @@ export default function PlanImport({ report }: ImportPageProps) {
                 </form>
 
                 {report && (
-                    <div className="flex flex-col gap-4 rounded-lg border p-4 text-sm">
+                    <div className="flex flex-col gap-4 rounded-lg border bg-card p-4 text-sm">
                         <p>
                             Принято новых: <strong>{report.accepted}</strong>. Обновлено: <strong>{report.updated}</strong>.
                         </p>

@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { useLabels } from '@/lib/labels';
 import { evidenceLabel } from '@/lib/utils';
+import { type BreadcrumbItem } from '@/types';
 
 interface Evidence {
     id: number;
@@ -33,6 +34,8 @@ interface QueueItem {
 interface ApprovalIndexProps {
     updates: QueueItem[];
 }
+
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Проверка этапов', href: '/approval' }];
 
 /**
  * Очередь «Этапы на проверку» — task-008,
@@ -67,7 +70,7 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
     }
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Проверка этапов" />
 
             <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
@@ -78,7 +81,7 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                         <button
                             key={u.id}
                             onClick={() => setSelectedId(u.id)}
-                            className={`rounded-lg border p-3 text-left text-sm ${selectedId === u.id ? 'border-primary bg-muted/50' : ''}`}
+                            className={`rounded-lg border bg-card p-3 text-left text-sm ${selectedId === u.id ? 'border-primary' : ''}`}
                         >
                             <div className="flex items-center justify-between">
                                 <span className="font-medium">
@@ -99,7 +102,7 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                 </div>
 
                 {selected && (
-                    <div className="flex flex-col gap-4 rounded-lg border p-4">
+                    <div className="flex flex-col gap-4 rounded-lg border bg-card p-4">
                         <div>
                             <p className="text-muted-foreground text-sm">
                                 №{selected.measure.number} · {selected.measure.direction} · период {selected.period}

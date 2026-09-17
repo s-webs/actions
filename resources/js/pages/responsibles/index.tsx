@@ -47,9 +47,6 @@ export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
 
             <div className="flex flex-col gap-4 p-6">
                 <h1 className="text-xl font-medium">Свод по ответственным</h1>
-                <p className="text-muted-foreground text-sm">
-                    Подсветка «перегружен» — временная эвристика (число мероприятий выше среднего), методика уточняется у заказчика.
-                </p>
 
                 <div className="grid max-w-sm gap-2">
                     <Label htmlFor="responsible-search">Поиск по имени</Label>
@@ -61,7 +58,7 @@ export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
                     />
                 </div>
 
-                <div className="overflow-x-auto rounded-lg border">
+                <div className="overflow-x-auto rounded-lg border bg-card">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-muted/50">
                             <tr>

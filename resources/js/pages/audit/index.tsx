@@ -56,7 +56,7 @@ export default function AuditIndex({ audits, models, filters }: AuditProps) {
                     </SelectContent>
                 </Select>
 
-                <div className="overflow-x-auto rounded-lg border">
+                <div className="overflow-x-auto rounded-lg border bg-card">
                     <table className="w-full text-left text-sm">
                         <thead className="bg-muted/50">
                             <tr>

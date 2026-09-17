@@ -53,17 +53,14 @@ export default function MonitoringIndex({ months, currentMonth, rows }: Monitori
 
             <div className="flex flex-col gap-4 p-6">
                 <h1 className="text-xl font-medium">Помесячный мониторинг</h1>
-                <p className="text-muted-foreground text-sm">
-                    Незакрытый текущий месяц ({currentMonth}) считается вживую, а не по срезу — отмечен курсивом.
-                </p>
 
-                <div className="max-h-[70vh] overflow-auto rounded-lg border">
+                <div className="max-h-[70vh] overflow-auto rounded-lg border bg-card">
                     <table className="border-collapse text-sm">
                         <thead>
                             <tr>
-                                <th className="sticky top-0 left-0 z-20 min-w-64 border-b bg-background p-2 text-left">Мероприятие</th>
+                                <th className="sticky top-0 left-0 z-20 min-w-64 border-b bg-card p-2 text-left">Мероприятие</th>
                                 {months.map((m) => (
-                                    <th key={m} className="sticky top-0 z-10 min-w-14 border-b bg-background p-2 text-center">
+                                    <th key={m} className="sticky top-0 z-10 min-w-14 border-b bg-card p-2 text-center">
                                         {m}
                                     </th>
                                 ))}
@@ -72,7 +69,7 @@ export default function MonitoringIndex({ months, currentMonth, rows }: Monitori
                         <tbody>
                             {rows.map((row) => (
                                 <tr key={row.id} className="border-t">
-                                    <td className="sticky left-0 z-10 max-w-64 truncate bg-background p-2" title={row.title}>
+                                    <td className="sticky left-0 z-10 max-w-64 truncate bg-card p-2" title={row.title}>
                                         №{row.number}. {row.title}
                                     </td>
                                     {row.cells.map((cell) => (
@@ -91,7 +88,7 @@ export default function MonitoringIndex({ months, currentMonth, rows }: Monitori
                 </div>
 
                 {selected && (
-                    <div className="rounded-lg border p-4 text-sm">
+                    <div className="rounded-lg border bg-card p-4 text-sm">
                         <p className="font-medium">
                             №{selected.row.number}. {selected.row.title} — {selected.cell.month}
                             {selected.cell.live && ' (незакрытый период)'}
