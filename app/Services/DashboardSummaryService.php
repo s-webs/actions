@@ -8,7 +8,9 @@ use App\Enums\RiskLevel;
 use App\Models\Direction;
 use App\Models\Measure;
 use App\Models\StagePeriodUpdate;
+use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Расчёт «Кабинета проректора» — вынесено из `DashboardController` (task-009), чтобы
@@ -20,12 +22,16 @@ class DashboardSummaryService
 {
     private const RISK_WEIGHT = ['high' => 3, 'medium' => 2, 'low' => 1];
 
-    public function build(): array
+    public function build(?User $user = null): array
     {
-        $measures = Measure::with(['direction', 'responsible', 'latestPeriodState', 'stages'])->get();
+        $query = Measure::with(['direction', 'responsible.user', 'latestPeriodState', 'stages']);
+        if ($user) {
+            $query->visibleTo($user);
+        }
+        $measures = $query->get();
 
         return [
-            'kpis' => $this->kpis($measures),
+            'kpis' => $this->kpis($measures, $user),
             'statusBreakdown' => $this->statusBreakdown($measures),
             'directionSummary' => $this->directionSummary($measures),
             'upcomingDeadlines' => $this->upcomingDeadlines($measures),
@@ -35,9 +41,17 @@ class DashboardSummaryService
         ];
     }
 
-    private function kpis($measures): array
+    /**
+     * @param  Collection<int, Measure>  $measures
+     */
+    private function kpis($measures, ?User $user = null): array
     {
         $statuses = $measures->map(fn (Measure $m) => $m->currentStatus());
+
+        $stagesToReview = StagePeriodUpdate::whereIn('review_state', [ReviewState::Submitted, ReviewState::Rework]);
+        if ($user) {
+            $stagesToReview->whereHas('stage.measure', fn ($q) => $q->visibleTo($user));
+        }
 
         return [
             'total' => $measures->count(),
@@ -47,7 +61,7 @@ class DashboardSummaryService
             'overdue' => $statuses->filter(fn ($s) => $s === MeasureStatus::Overdue)->count(),
             'high_risk' => $measures->filter(fn (Measure $m) => $m->currentRiskLevel() === RiskLevel::High)->count(),
             'avg_percent' => $measures->isEmpty() ? 0 : (int) round($measures->avg('percent')),
-            'stages_to_review' => StagePeriodUpdate::whereIn('review_state', [ReviewState::Submitted, ReviewState::Rework])->count(),
+            'stages_to_review' => $stagesToReview->count(),
         ];
     }
 
@@ -138,7 +152,7 @@ class DashboardSummaryService
             'id' => $measure->id,
             'number' => $measure->number,
             'title' => $measure->title,
-            'responsible' => $measure->responsible?->name,
+            'responsible' => $measure->responsible?->labeledName(),
             'deadline' => $measure->deadline?->format('Y-m-d'),
             'percent' => $measure->percent,
             'risk_level' => $measure->currentRiskLevel()?->value,

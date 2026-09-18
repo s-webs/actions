@@ -28,7 +28,8 @@ class PlanController extends Controller
     public function index(Request $request): Response
     {
         $query = Measure::query()
-            ->with(['direction', 'responsible', 'latestPeriodState', 'stages.periodUpdates', 'stages.evidences']);
+            ->visibleTo($request->user())
+            ->with(['direction', 'responsible.user', 'latestPeriodState', 'stages.periodUpdates', 'stages.evidences']);
 
         $this->applyFilters($query, $request);
         $this->applySort($query, $request);
@@ -41,7 +42,7 @@ class PlanController extends Controller
                 'number' => $measure->number,
                 'title' => $measure->title,
                 'direction' => $measure->direction?->name,
-                'responsible' => $measure->responsible?->name,
+                'responsible' => $measure->responsible?->labeledName(),
                 'deadline' => $measure->deadline?->format('Y-m-d'),
                 'status' => $measure->currentStatus()->value,
                 'percent' => $measure->percent,
@@ -61,7 +62,7 @@ class PlanController extends Controller
             ]),
             'directions' => Direction::orderBy('number')->get(['id', 'number', 'name']),
             'statuses' => collect(MeasureStatus::cases())->map->value,
-            'canManageStages' => Auth::user()->can('manage', Measure::class),
+            'canManageStages' => Auth::user()->can('override', Measure::class),
             'canCreate' => Auth::user()->can('create', Measure::class),
             'canImport' => Auth::user()->can('import', Measure::class),
             'isDeveloper' => Auth::user()->hasRole('developer'),

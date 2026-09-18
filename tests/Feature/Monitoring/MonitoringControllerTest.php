@@ -2,8 +2,10 @@
 
 use App\Enums\MeasureStatus;
 use App\Enums\PeriodState;
+use App\Enums\RiskLevel;
 use App\Models\CalendarFocus;
 use App\Models\Measure;
+use App\Models\MeasurePeriodState;
 use App\Models\Period;
 use App\Models\Snapshot;
 use App\Models\User;
@@ -51,6 +53,13 @@ test('a closed period snapshot renders as its status symbol', function () {
         'period_id' => $period->id,
         'status' => MeasureStatus::AtRisk,
         'percent' => 35,
+        'risk_level' => RiskLevel::Medium,
+    ]);
+    MeasurePeriodState::factory()->create([
+        'measure_id' => $measure->id,
+        'period_id' => $period->id,
+        'risk_text' => 'Срыв сроков этапа',
+        'needs_decision' => true,
     ]);
 
     $this->actingAs($this->user)
@@ -59,7 +68,12 @@ test('a closed period snapshot renders as its status symbol', function () {
             ->where('rows.0.cells', function ($cells) {
                 $cell = collect($cells)->firstWhere('month', $this->nonCurrentMonth);
 
-                return $cell['symbol'] === '⚠' && $cell['percent'] === 35 && $cell['live'] === false;
+                return $cell['symbol'] === '⚠'
+                    && $cell['percent'] === 35
+                    && $cell['live'] === false
+                    && $cell['risk_level'] === 'medium'
+                    && $cell['risk_text'] === 'Срыв сроков этапа'
+                    && $cell['needs_decision'] === true;
             }));
 });
 
@@ -75,5 +89,34 @@ test('the current unclosed month is computed live and flagged, not read from a s
                 $current = collect($cells)->firstWhere('month', $currentMonth);
 
                 return $current['live'] === true && $current['symbol'] === '!';
+            }));
+});
+
+test('a live cell includes risk level and problem text', function () {
+    $measure = Measure::factory()->create([
+        'number' => 1,
+        'deadline' => now()->addDays(5),
+        'title' => 'Контроль сроков',
+    ]);
+    MeasurePeriodState::factory()->create([
+        'measure_id' => $measure->id,
+        'period_id' => Period::current()->id,
+        'risk_text' => 'Не хватает данных',
+        'needs_decision' => true,
+    ]);
+    $currentMonth = Period::current()->month->format('Y-m');
+
+    $this->actingAs($this->user)
+        ->get(route('monitoring.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rows.0.responsible', $measure->responsible->labeledName())
+            ->where('rows.0.deadline', $measure->deadline->format('Y-m-d'))
+            ->where('rows.0.cells', function ($cells) use ($currentMonth) {
+                $current = collect($cells)->firstWhere('month', $currentMonth);
+
+                return $current['live'] === true
+                    && $current['risk_level'] === 'high'
+                    && $current['risk_text'] === 'Не хватает данных'
+                    && $current['needs_decision'] === true;
             }));
 });

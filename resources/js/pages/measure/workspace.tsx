@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { EvidenceList, StageDetailCard } from '@/components/stage-detail-card';
 import type { StageDetail, StageDetailEvidence } from '@/components/stage-detail-card';
 import { useLabels } from '@/lib/labels';
+import { formatDisplayDate } from '@/lib/utils';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
 type ExecutorStatus = 'not_started' | 'in_progress';
@@ -257,7 +258,7 @@ function StageSetup({ stages }: { stages: StageListItem[] }) {
                                             {s.order}. {s.title}
                                         </p>
                                         <p className="text-muted-foreground text-sm">
-                                            {s.planned_date ?? '—'} · Вес: {s.weight}%
+                                            {formatDisplayDate(s.planned_date)} · Вес: {s.weight}%
                                         </p>
                                     </div>
                                     <div className="flex gap-2">
@@ -322,7 +323,7 @@ function StageSidebar({
                                     {s.order}. {s.title}
                                 </span>
                                 <span className="text-muted-foreground text-xs">
-                                    {s.planned_date ?? '—'} · {s.weight}%
+                                    {formatDisplayDate(s.planned_date)} · {s.weight}%
                                 </span>
                             </div>
                         </>
@@ -406,7 +407,7 @@ export default function Workspace({
                     </p>
                     <h1 className="text-xl font-medium">{measure.title}</h1>
                     <p className="text-muted-foreground mt-1 text-sm">
-                        Срок: {measure.deadline ?? '—'} · Статус: {measureStatus(measure.status)} · % исполнения: {measure.percent}
+                        Срок: {formatDisplayDate(measure.deadline)} · Статус: {measureStatus(measure.status)} · % исполнения: {measure.percent}
                     </p>
                 </div>
                 <Button type="button" variant="ghost" size="sm" onClick={() => router.post(route('measure.logout'))}>
@@ -444,7 +445,7 @@ export default function Workspace({
                                         <Badge variant="outline">{reviewStateLabel(reviewState)}</Badge>
                                     </div>
                                     <p className="text-muted-foreground text-sm">
-                                        Плановая дата: {currentStage.planned_date ?? '—'} · Вес: {currentStage.weight}%
+                                        Плановая дата: {formatDisplayDate(currentStage.planned_date)} · Вес: {currentStage.weight}%
                                     </p>
 
                                     {currentStage.update?.review_comment && (

@@ -6,6 +6,7 @@ use App\Enums\MeasureStatus;
 use App\Enums\ReviewState;
 use App\Enums\RiskLevel;
 use Database\Factories\MeasureFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -64,6 +65,25 @@ class Measure extends Model implements AuditableContract
     public function responsible(): BelongsTo
     {
         return $this->belongsTo(Responsible::class);
+    }
+
+    /**
+     * @param  Builder<Measure>  $query
+     * @return Builder<Measure>
+     */
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        if ($user->canAccessAllMeasures()) {
+            return $query;
+        }
+
+        $responsibleId = $user->responsibleProfile?->id;
+
+        if ($responsibleId === null) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return $query->where('responsible_id', $responsibleId);
     }
 
     public function coExecutors(): HasMany

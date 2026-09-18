@@ -1,9 +1,9 @@
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/react';
-import { Archive, Calendar, CalendarClock, ClipboardCheck, ClipboardList, FileText, History, KeyRound, LayoutGrid, ListTree, Users } from 'lucide-react';
+import { type NavItem, type SharedData } from '@/types';
+import { Link, usePage } from '@inertiajs/react';
+import { Archive, Calendar, CalendarClock, ClipboardCheck, ClipboardList, FileText, History, KeyRound, LayoutGrid, ListTree, UserCog, Users } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -43,6 +43,11 @@ const mainNavItems: NavItem[] = [
         icon: Users,
     },
     {
+        title: 'Должности и ответственные',
+        url: '/responsibles/accounts',
+        icon: UserCog,
+    },
+    {
         title: 'Доказательная база',
         url: '/evidence',
         icon: FileText,
@@ -64,7 +69,36 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
+const responsibleUrls = new Set([
+    '/dashboard',
+    '/plan',
+    '/approval',
+    '/monitoring',
+    '/calendar',
+    '/evidence',
+    '/credentials',
+]);
+
+const accountsUrl = '/responsibles/accounts';
+
 export function AppSidebar() {
+    const roles = usePage<SharedData>().props.auth.user?.roles ?? [];
+    const isAdminLike = roles.includes('developer') || roles.includes('administrator');
+    const isResponsibleOnly =
+        roles.includes('responsible') && !isAdminLike && !roles.includes('observer');
+
+    const items = mainNavItems.filter((item) => {
+        if (item.url === accountsUrl) {
+            return isAdminLike;
+        }
+
+        if (isResponsibleOnly) {
+            return responsibleUrls.has(item.url);
+        }
+
+        return true;
+    });
+
     return (
         <Sidebar collapsible="icon">
             <SidebarHeader>
@@ -80,7 +114,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavMain items={items} />
             </SidebarContent>
 
             <SidebarFooter>

@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Enums\MeasureStatus;
 use App\Enums\ReviewState;
 use App\Enums\RiskLevel;
+use App\Models\User;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -46,7 +47,7 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $request->user(),
+                'user' => $this->shareUser($request),
             ],
             'labels' => [
                 'measure_status' => collect(MeasureStatus::cases())
@@ -59,6 +60,23 @@ class HandleInertiaRequests extends Middleware
                     ->mapWithKeys(fn (RiskLevel $level) => [$level->value => $level->label()])
                     ->all(),
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function shareUser(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        return [
+            ...$user->toArray(),
+            'roles' => $user->getRoleNames()->values()->all(),
         ];
     }
 }

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { useLabels } from '@/lib/labels';
-import { evidenceLabel } from '@/lib/utils';
+import { evidenceLabel, formatDisplayDate } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 
 interface Evidence {
@@ -110,7 +110,8 @@ export default function ApprovalIndex({ updates }: ApprovalIndexProps) {
                             <h2 className="text-lg font-medium">{selected.measure.title}</h2>
                             <p className="text-muted-foreground text-sm">
                                 Этап: {selected.stage.title} ({selected.stage.weight}%, плановая дата{' '}
-                                {selected.stage.planned_date ?? '—'}) · Срок мероприятия: {selected.measure.deadline ?? '—'} · Уровень риска:{' '}
+                                {formatDisplayDate(selected.stage.planned_date)}) · Срок мероприятия:{' '}
+                                {formatDisplayDate(selected.measure.deadline)} · Уровень риска:{' '}
                                 {selected.measure.risk_level ? riskLevel(selected.measure.risk_level) : '—'}
                             </p>
                         </div>

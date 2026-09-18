@@ -32,6 +32,7 @@ class ApprovalController extends Controller
 
         $updates = StagePeriodUpdate::query()
             ->whereIn('review_state', [ReviewState::Submitted, ReviewState::Rework])
+            ->whereHas('stage.measure', fn ($q) => $q->visibleTo($request->user()))
             ->with(['stage.measure.direction', 'stage.measure.stages', 'period'])
             ->get()
             ->sortBy(fn (StagePeriodUpdate $u) => $this->priority($u))

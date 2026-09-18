@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { useLabels } from '@/lib/labels';
+import { formatDisplayDate } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
@@ -225,7 +226,7 @@ function StageManager({
                             <tr key={s.id}>
                                 <td className="pr-4">{s.order}</td>
                                 <td className="pr-4">{s.title}</td>
-                                <td className="pr-4">{s.planned_date ?? '—'}</td>
+                                <td className="pr-4">{formatDisplayDate(s.planned_date)}</td>
                                 <td className="pr-4">{s.weight}%</td>
                                 <td className="pr-4">{reviewState(s.review_state)}</td>
                                 <td className="pr-4">
@@ -376,7 +377,7 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="responsible">Ответственный</Label>
+                        <Label htmlFor="responsible">Должность</Label>
                         <Input
                             id="responsible"
                             className="w-56"
@@ -456,7 +457,7 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
                                 <th className="p-3">№</th>
                                 <th className="p-3">Направление</th>
                                 <th className="p-3">Мероприятие</th>
-                                <th className="p-3">Ответственный</th>
+                                <th className="p-3">Должность</th>
                                 <th className="p-3">Срок</th>
                                 <th className="p-3">Статус</th>
                                 <th className="p-3">%</th>
@@ -478,7 +479,7 @@ export default function PlanIndex({ measures, filters, directions, statuses, can
                                         <td className="p-3">{m.direction}</td>
                                         <td className="p-3">{m.title}</td>
                                         <td className="p-3">{m.responsible}</td>
-                                        <td className="p-3">{m.deadline}</td>
+                                        <td className="p-3">{formatDisplayDate(m.deadline)}</td>
                                         <td className="p-3">
                                             <Badge variant={STATUS_VARIANT[m.status]}>{measureStatus(m.status)}</Badge>
                                             {m.needs_decision && (

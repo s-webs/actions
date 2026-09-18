@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Measure;
+use App\Models\User;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -26,9 +27,17 @@ class PlanExport implements FromCollection, WithHeadings, WithMapping
         'done' => 'Выполнено',
     ];
 
+    public function __construct(private ?User $user = null) {}
+
     public function collection(): Collection
     {
-        return Measure::with(['direction', 'responsible', 'stages', 'latestPeriodState'])->orderBy('number')->get();
+        $query = Measure::with(['direction', 'responsible.user', 'stages', 'latestPeriodState'])->orderBy('number');
+
+        if ($this->user) {
+            $query->visibleTo($this->user);
+        }
+
+        return $query->get();
     }
 
     public function headings(): array
@@ -48,7 +57,7 @@ class PlanExport implements FromCollection, WithHeadings, WithMapping
             $measure->number,
             $measure->direction?->name,
             $measure->title,
-            $measure->responsible?->name,
+            $measure->responsible?->labeledName(),
             $measure->deadline?->format('d.m.Y'),
             $measure->interim_monitoring_text,
             $measure->reviewed_by,

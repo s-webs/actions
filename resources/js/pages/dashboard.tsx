@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { useLabels } from '@/lib/labels';
+import { formatDisplayDate } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 
 type MeasureStatus = 'not_started' | 'in_progress' | 'at_risk' | 'overdue' | 'done';
@@ -59,7 +60,7 @@ function MeasureRow({ m }: { m: MeasureSummary }) {
             <td className="p-2">{m.number}</td>
             <td className="p-2">{m.title}</td>
             <td className="p-2">{m.responsible}</td>
-            <td className="p-2">{m.deadline}</td>
+            <td className="p-2">{formatDisplayDate(m.deadline)}</td>
             <td className="p-2">{m.percent}%</td>
             <td className="p-2">
                 <Badge variant="outline">{measureStatus(m.status)}</Badge>
@@ -75,7 +76,6 @@ function MeasureRow({ m }: { m: MeasureSummary }) {
  */
 export default function Dashboard({ kpis, statusBreakdown, directionSummary, upcomingDeadlines, needsDecision, topRisks, generatedAt }: DashboardProps) {
     const { measureStatus, riskLevel } = useLabels();
-    const maxDirectionPercent = Math.max(...directionSummary.map((d) => d.avg_percent), 1);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -184,7 +184,7 @@ export default function Dashboard({ kpis, statusBreakdown, directionSummary, upc
                                 <div className="h-3 flex-1 rounded-full bg-muted">
                                     <div
                                         className="h-3 rounded-full bg-primary"
-                                        style={{ width: `${(d.avg_percent / maxDirectionPercent) * 100}%` }}
+                                        style={{ width: `${d.avg_percent}%` }}
                                     />
                                 </div>
                                 <span className="w-16 text-right text-muted-foreground">
@@ -208,7 +208,7 @@ export default function Dashboard({ kpis, statusBreakdown, directionSummary, upc
                                         <span>
                                             №{m.number}. {m.title}
                                         </span>
-                                        <span className="text-muted-foreground">{m.deadline}</span>
+                                        <span className="text-muted-foreground">{formatDisplayDate(m.deadline)}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -230,7 +230,7 @@ export default function Dashboard({ kpis, statusBreakdown, directionSummary, upc
                                             {m.risk_level && <Badge variant="outline">{riskLevel(m.risk_level)}</Badge>}
                                         </div>
                                         <p className="text-muted-foreground">
-                                            {m.responsible} · срок {m.deadline ?? '—'} · {m.percent}%
+                                            {m.responsible} · срок {formatDisplayDate(m.deadline)} · {m.percent}%
                                             {m.problem ? ` · ${m.problem}` : ''}
                                         </p>
                                     </li>
@@ -250,7 +250,7 @@ export default function Dashboard({ kpis, statusBreakdown, directionSummary, upc
                                 <tr>
                                     <th className="p-2">№</th>
                                     <th className="p-2">Мероприятие</th>
-                                    <th className="p-2">Ответственный</th>
+                                    <th className="p-2">Должность</th>
                                     <th className="p-2">Срок</th>
                                     <th className="p-2">%</th>
                                     <th className="p-2">Статус</th>

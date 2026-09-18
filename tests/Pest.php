@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Responsible;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,4 +49,19 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * @return array{0: User, 1: Responsible}
+ */
+function createResponsibleAccount(array $userAttributes = []): array
+{
+    $user = User::factory()->create($userAttributes);
+    $user->assignRole('responsible');
+    $profile = Responsible::factory()->create([
+        'name' => $user->name,
+        'user_id' => $user->id,
+    ]);
+
+    return [$user->fresh(), $profile->fresh()];
 }

@@ -33,6 +33,15 @@ class MeasureController extends Controller
 
         return Inertia::render('plan/create', [
             'directions' => Direction::orderBy('number')->get(['id', 'number', 'name']),
+            'responsibles' => Responsible::query()
+                ->with('user')
+                ->orderBy('name')
+                ->get(['id', 'name', 'user_id'])
+                ->map(fn (Responsible $responsible) => [
+                    'id' => $responsible->id,
+                    'name' => $responsible->name,
+                    'occupant' => $responsible->user?->name,
+                ]),
             'nextNumber' => $nextNumber > 0 ? $nextNumber : 1,
             'credential' => $request->session()->get('credential'),
         ]);
@@ -51,7 +60,7 @@ class MeasureController extends Controller
             ->all();
 
         $request->merge([
-            'responsible' => $request->filled('responsible') ? trim((string) $request->input('responsible')) : null,
+            'responsible_id' => $request->filled('responsible_id') ? $request->integer('responsible_id') : null,
             'deadline' => $request->filled('deadline') ? $request->input('deadline') : null,
             'stages' => $stages,
         ]);
@@ -60,7 +69,7 @@ class MeasureController extends Controller
             'number' => ['required', 'integer', 'min:1', 'max:255', 'unique:measures,number'],
             'title' => ['required', 'string'],
             'direction_id' => ['required', 'exists:directions,id'],
-            'responsible' => ['nullable', 'string', 'max:255'],
+            'responsible_id' => ['nullable', 'exists:responsibles,id'],
             'deadline' => ['nullable', 'date'],
             'stages' => ['nullable', 'array'],
             'stages.*.title' => ['required', 'string', 'max:255'],
@@ -69,16 +78,11 @@ class MeasureController extends Controller
         ]);
 
         $credential = DB::transaction(function () use ($validated) {
-            $responsibleName = trim((string) ($validated['responsible'] ?? ''));
-            $responsible = $responsibleName !== ''
-                ? Responsible::firstOrCreate(['name' => $responsibleName])
-                : null;
-
             $measure = Measure::create([
                 'number' => $validated['number'],
                 'title' => $validated['title'],
                 'direction_id' => $validated['direction_id'],
-                'responsible_id' => $responsible?->id,
+                'responsible_id' => $validated['responsible_id'] ?? null,
                 'deadline' => $validated['deadline'] ?? null,
             ]);
 
@@ -108,7 +112,7 @@ class MeasureController extends Controller
      */
     public function accept(Request $request, Measure $measure): RedirectResponse
     {
-        Gate::authorize('manage', Measure::class);
+        Gate::authorize('accept', Measure::class);
 
         $measure->load('stages');
 

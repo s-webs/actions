@@ -29,6 +29,8 @@ class AuditController extends Controller
 
     public function index(Request $request): Response
     {
+        abort_unless($request->user()?->canAccessAllMeasures(), 403);
+
         $query = Audit::query()->with('user')->latest();
 
         $query->when($request->filled('model'), fn ($q) => $q->where('auditable_type', $request->string('model')));

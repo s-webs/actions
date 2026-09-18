@@ -24,6 +24,7 @@ interface StageDraft {
 
 interface PlanCreateProps {
     directions: { id: number; number: number; name: string }[];
+    responsibles: { id: number; name: string; occupant: string | null }[];
     nextNumber: number;
     credential: CredentialFlash | null;
 }
@@ -33,15 +34,17 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Новое мероприятие', href: '/plan/create' },
 ];
 
+const NONE = '__none__';
+
 /**
  * Ручное создание одного мероприятия — дополнение к импорту Excel.
  */
-export default function PlanCreate({ directions, nextNumber, credential }: PlanCreateProps) {
+export default function PlanCreate({ directions, responsibles, nextNumber, credential }: PlanCreateProps) {
     const { data, setData, post, processing, errors } = useForm({
         number: String(nextNumber),
         title: '',
         direction_id: '',
-        responsible: '',
+        responsible_id: '',
         deadline: '',
         stages: [] as StageDraft[],
     });
@@ -139,14 +142,26 @@ export default function PlanCreate({ directions, nextNumber, credential }: PlanC
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="responsible">Ответственный</Label>
-                            <Input
-                                id="responsible"
-                                value={data.responsible}
-                                onChange={(e) => setData('responsible', e.target.value)}
-                                placeholder="ФИО или должность"
-                            />
-                            <InputError message={errors.responsible} />
+                            <Label>Должность</Label>
+                            <Select
+                                value={data.responsible_id || NONE}
+                                onValueChange={(value) => setData('responsible_id', value === NONE ? '' : value)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Не назначена" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={NONE}>Не назначена</SelectItem>
+                                    {responsibles.map((responsible) => (
+                                        <SelectItem key={responsible.id} value={String(responsible.id)}>
+                                            {responsible.occupant
+                                                ? `${responsible.name} — ${responsible.occupant}`
+                                                : responsible.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <InputError message={errors.responsible_id} />
                         </div>
 
                         <div className="grid gap-2">

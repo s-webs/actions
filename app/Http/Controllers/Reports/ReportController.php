@@ -6,6 +6,7 @@ use App\Exports\PlanExport;
 use App\Http\Controllers\Controller;
 use App\Services\DashboardSummaryService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,15 +17,15 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ReportController extends Controller
 {
-    public function dashboardPdf(DashboardSummaryService $summary): Response
+    public function dashboardPdf(Request $request, DashboardSummaryService $summary): Response
     {
-        $pdf = Pdf::loadView('exports.dashboard', $summary->build());
+        $pdf = Pdf::loadView('exports.dashboard', $summary->build($request->user()));
 
         return $pdf->stream('kabinet-prorektora.pdf');
     }
 
-    public function planXlsx(): BinaryFileResponse
+    public function planXlsx(Request $request): BinaryFileResponse
     {
-        return Excel::download(new PlanExport, 'plan-'.now()->format('Y-m-d').'.xlsx');
+        return Excel::download(new PlanExport($request->user()), 'plan-'.now()->format('Y-m-d').'.xlsx');
     }
 }

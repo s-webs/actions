@@ -7,6 +7,7 @@ use App\Enums\RiskLevel;
 use App\Http\Controllers\Controller;
 use App\Models\Measure;
 use App\Models\Responsible;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,18 +21,20 @@ class ResponsibleSummaryController extends Controller
 {
     public function index(): Response
     {
+        Gate::authorize('viewAny', Responsible::class);
+
         $measures = Measure::with(['latestPeriodState', 'stages'])->get();
-        $responsibles = Responsible::orderBy('name')->get();
+        $responsibles = Responsible::with('user')->orderBy('name')->get();
 
         $rows = $responsibles->map(function (Responsible $responsible) use ($measures) {
             $own = $measures->where('responsible_id', $responsible->id);
 
-            return $this->summarize($responsible->name, $own);
+            return $this->summarize($responsible->name, $own, $responsible->user?->name);
         });
 
         $unassigned = $measures->whereNull('responsible_id');
         if ($unassigned->isNotEmpty()) {
-            $rows->push($this->summarize('Без ответственного', $unassigned));
+            $rows->push($this->summarize('Без должности', $unassigned, null));
         }
 
         $rows = $rows->filter(fn ($row) => $row['count'] > 0)->values();
@@ -46,12 +49,13 @@ class ResponsibleSummaryController extends Controller
         return Inertia::render('responsibles/index', ['rows' => $rows->values()]);
     }
 
-    private function summarize(string $name, $measures): array
+    private function summarize(string $name, $measures, ?string $occupant): array
     {
         $statuses = $measures->map(fn (Measure $m) => $m->currentStatus());
 
         return [
             'name' => $name,
+            'occupant' => $occupant,
             'count' => $measures->count(),
             'status_breakdown' => collect(MeasureStatus::cases())
                 ->mapWithKeys(fn ($s) => [$s->value => $statuses->filter(fn ($x) => $x === $s)->count()]),

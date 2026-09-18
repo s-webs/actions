@@ -6,20 +6,28 @@ use App\Models\StagePeriodUpdate;
 use App\Models\User;
 
 /**
- * `%` этапа и решение (утвердить/отклонить/на доработку) — единственная точка входа
- * процента в систему, роль `administrator`. Guard `measure` сюда не допускается вообще —
- * [[Бизнес-правила#Правило 2а · `%` появляется только через утверждение проректором]].
+ * `%` этапа и решение (утвердить/отклонить/на доработку). Administrator — все
+ * мероприятия; responsible — только свои. Guard `measure` сюда не допускается.
  */
 class StagePeriodUpdatePolicy
 {
-    /** Очередь «Этапы на проверку» — [[Функциональные требования#4.13]]. */
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('administrator');
+        return $user->hasAnyRole(['administrator', 'responsible']);
     }
 
     public function approve(User $user, StagePeriodUpdate $stagePeriodUpdate): bool
     {
-        return $user->hasRole('administrator');
+        if ($user->hasRole('administrator')) {
+            return true;
+        }
+
+        if (! $user->hasRole('responsible')) {
+            return false;
+        }
+
+        $measure = $stagePeriodUpdate->stage?->measure;
+
+        return $measure !== null && $user->ownsMeasure($measure);
     }
 }

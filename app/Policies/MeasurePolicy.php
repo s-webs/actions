@@ -3,17 +3,22 @@
 namespace App\Policies;
 
 use App\Http\Controllers\Measure\WorkspaceController;
+use App\Models\Measure;
 use App\Models\User;
 
 /**
- * Импорт и наполнение плана — роль `administrator` (слияние бывших `coordinator` и
- * `proctor` — [[Роли и права#Администраторы]]). Заведение самих этапов теперь доступно
- * и с логина мероприятия ({@see WorkspaceController}) —
- * это Policy покрывает только веб-администраторскую сторону (импорт, учётные данные,
- * структурный оверрайд).
+ * Импорт и наполнение плана — роль `administrator`. Заведение этапов доступно
+ * и с логина мероприятия ({@see WorkspaceController}). `manage` — учётные данные:
+ * administrator видит все, responsible — только свои. Структурный оверрайд
+ * этапов и «принять работу» — `override` / `accept`, только administrator.
  */
 class MeasurePolicy
 {
+    public function view(User $user, Measure $measure): bool
+    {
+        return $user->canAccessAllMeasures() || $user->ownsMeasure($measure);
+    }
+
     public function import(User $user): bool
     {
         return $user->hasRole('administrator');
@@ -25,8 +30,31 @@ class MeasurePolicy
         return $user->hasRole('administrator');
     }
 
-    /** Учётные данные мероприятий, структурный оверрайд этапов — [[Функциональные требования#4.14]]. */
-    public function manage(User $user): bool
+    /**
+     * Учётные данные мероприятий. На классе — вход в модуль; на экземпляре —
+     * действие по конкретному мероприятию.
+     */
+    public function manage(User $user, mixed $measure = null): bool
+    {
+        if (! $user->hasAnyRole(['administrator', 'responsible'])) {
+            return false;
+        }
+
+        if ($measure instanceof Measure) {
+            return $user->hasRole('administrator') || $user->ownsMeasure($measure);
+        }
+
+        return true;
+    }
+
+    /** Структурный оверрайд этапов в реестре плана. */
+    public function override(User $user): bool
+    {
+        return $user->hasRole('administrator');
+    }
+
+    /** «Принять работу» — 100% после утверждения всех этапов. */
+    public function accept(User $user): bool
     {
         return $user->hasRole('administrator');
     }

@@ -28,7 +28,7 @@ class MeasureStageController extends Controller
 {
     public function store(Request $request, Measure $measure): RedirectResponse
     {
-        Gate::authorize('manage', Measure::class);
+        Gate::authorize('override', Measure::class);
         $this->ensureStructureEditable($request, $measure);
 
         $data = $request->validate([
@@ -46,7 +46,7 @@ class MeasureStageController extends Controller
 
     public function update(Request $request, MeasureStage $stage): RedirectResponse
     {
-        Gate::authorize('manage', Measure::class);
+        Gate::authorize('override', Measure::class);
         $this->ensureStructureEditable($request, $stage->measure);
 
         $data = $request->validate([
@@ -62,7 +62,7 @@ class MeasureStageController extends Controller
 
     public function destroy(Request $request, MeasureStage $stage): RedirectResponse
     {
-        Gate::authorize('manage', Measure::class);
+        Gate::authorize('override', Measure::class);
         $this->ensureStructureEditable($request, $stage->measure);
 
         $hasApprovedHistory = $stage->periodUpdates()->where('review_state', ReviewState::Approved)->exists();

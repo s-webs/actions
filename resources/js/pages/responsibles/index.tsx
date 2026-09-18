@@ -5,10 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatDisplayDate } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 
 interface ResponsibleRow {
     name: string;
+    occupant: string | null;
     count: number;
     status_breakdown: Record<string, number>;
     avg_percent: number;
@@ -38,7 +40,10 @@ export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
             return rows;
         }
 
-        return rows.filter((row) => row.name.toLowerCase().includes(needle));
+        return rows.filter(
+            (row) =>
+                row.name.toLowerCase().includes(needle) || (row.occupant ?? '').toLowerCase().includes(needle),
+        );
     }, [rows, search]);
 
     return (
@@ -49,7 +54,7 @@ export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
                 <h1 className="text-xl font-medium">Свод по ответственным</h1>
 
                 <div className="grid max-w-sm gap-2">
-                    <Label htmlFor="responsible-search">Поиск по имени</Label>
+                    <Label htmlFor="responsible-search">Поиск по должности или ФИО</Label>
                     <Input
                         id="responsible-search"
                         value={search}
@@ -62,7 +67,8 @@ export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
                     <table className="w-full text-left text-sm">
                         <thead className="bg-muted/50">
                             <tr>
-                                <th className="p-3">Ответственный</th>
+                                <th className="p-3">Должность</th>
+                                <th className="p-3">Сотрудник</th>
                                 <th className="p-3">Мероприятий</th>
                                 <th className="p-3">Средний %</th>
                                 <th className="p-3">Высокий риск</th>
@@ -81,16 +87,17 @@ export default function ResponsiblesIndex({ rows }: ResponsiblesProps) {
                                             </Badge>
                                         )}
                                     </td>
+                                    <td className="p-3">{row.occupant ?? '—'}</td>
                                     <td className="p-3">{row.count}</td>
                                     <td className="p-3">{row.avg_percent}%</td>
                                     <td className="p-3">{row.risks}</td>
                                     <td className="p-3">{row.overdue}</td>
-                                    <td className="p-3">{row.nearest_deadline ?? '—'}</td>
+                                    <td className="p-3">{formatDisplayDate(row.nearest_deadline)}</td>
                                 </tr>
                             ))}
                             {filteredRows.length === 0 && (
                                 <tr className="border-t">
-                                    <td className="p-3 text-muted-foreground" colSpan={6}>
+                                    <td className="p-3 text-muted-foreground" colSpan={7}>
                                         Ничего не найдено
                                     </td>
                                 </tr>

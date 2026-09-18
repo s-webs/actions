@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLabels } from '@/lib/labels';
-import { evidenceLabel } from '@/lib/utils';
+import { evidenceLabel, formatDisplayDate } from '@/lib/utils';
 
 export type StageDetailReviewState = 'draft' | 'submitted' | 'approved' | 'rejected' | 'rework';
 
@@ -66,7 +66,7 @@ export function StageDetailCard({ stage }: { stage: StageDetail }) {
                         Этап {stage.order}. {stage.title}
                     </CardTitle>
                     <CardDescription className="break-words">
-                        Плановая дата: {stage.planned_date ?? '—'} · Вес: {stage.weight}%
+                        Плановая дата: {formatDisplayDate(stage.planned_date)} · Вес: {stage.weight}%
                         {stage.update?.approved_percent != null ? ` · Утверждено ${stage.update.approved_percent}%` : ''}
                     </CardDescription>
                 </div>

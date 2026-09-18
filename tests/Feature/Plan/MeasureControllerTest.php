@@ -127,23 +127,24 @@ test('an observer cannot create a measure', function () {
     expect(Measure::query()->where('number', 99)->exists())->toBeFalse();
 });
 
-test('creating a measure with responsible name creates or reuses the catalog entry', function () {
+test('creating a measure with a catalog responsible attaches that entry', function () {
     $administrator = User::factory()->create();
     $administrator->assignRole('administrator');
     $direction = Direction::factory()->create();
+    $responsible = Responsible::factory()->create(['name' => 'Проректор по АР']);
 
     $this->actingAs($administrator)->post(route('plan.measures.store'), [
         'number' => 10,
         'title' => 'Первое',
         'direction_id' => $direction->id,
-        'responsible' => 'Проректор по АР',
+        'responsible_id' => $responsible->id,
     ])->assertRedirect(route('plan.create'));
 
     $this->actingAs($administrator)->post(route('plan.measures.store'), [
         'number' => 11,
         'title' => 'Второе',
         'direction_id' => $direction->id,
-        'responsible' => '  Проректор по АР  ',
+        'responsible_id' => $responsible->id,
     ])->assertRedirect(route('plan.create'));
 
     expect(Responsible::query()->where('name', 'Проректор по АР')->count())->toBe(1);

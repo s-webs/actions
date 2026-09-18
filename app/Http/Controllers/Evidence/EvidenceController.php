@@ -18,9 +18,10 @@ use Inertia\Response;
  */
 class EvidenceController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $measures = Measure::query()
+            ->visibleTo($request->user())
             ->orderBy('number')
             ->withCount('evidences')
             ->get(['id', 'number', 'title']);
@@ -32,6 +33,8 @@ class EvidenceController extends Controller
 
     public function show(Request $request, Measure $measure): Response
     {
+        Gate::authorize('view', $measure);
+
         $groups = $measure->evidences()
             ->with(['stage', 'period'])
             ->latest()
@@ -59,7 +62,7 @@ class EvidenceController extends Controller
                 'title' => $measure->title,
             ],
             'groups' => $groups,
-            'canDelete' => $request->user()->hasAnyRole(['administrator', 'developer']),
+            'canDelete' => $request->user()->can('delete', $measure->evidences()->make()),
         ]);
     }
 

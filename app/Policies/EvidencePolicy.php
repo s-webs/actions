@@ -6,13 +6,22 @@ use App\Models\Evidence;
 use App\Models\User;
 
 /**
- * [[Функциональные требования#4.6 Модуль «Доказательная база»]]: документы удаляет
- * роль `administrator` (запись в аудит — task-019, `Auditable` на модели).
+ * Документы удаляет administrator по всем мероприятиям или responsible по своим.
  */
 class EvidencePolicy
 {
     public function delete(User $user, Evidence $evidence): bool
     {
-        return $user->hasRole('administrator');
+        if ($user->hasRole('administrator')) {
+            return true;
+        }
+
+        if (! $user->hasRole('responsible')) {
+            return false;
+        }
+
+        $measure = $evidence->measure;
+
+        return $measure !== null && $user->ownsMeasure($measure);
     }
 }

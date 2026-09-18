@@ -23,7 +23,11 @@ class CredentialController extends Controller
     {
         Gate::authorize('manage', Measure::class);
 
-        $measures = Measure::with(['credential', 'sessions'])->orderBy('number')->get();
+        $measures = Measure::query()
+            ->visibleTo($request->user())
+            ->with(['credential', 'sessions'])
+            ->orderBy('number')
+            ->get();
 
         return Inertia::render('credentials/index', [
             'rows' => $measures->map(fn (Measure $m) => [
@@ -51,7 +55,7 @@ class CredentialController extends Controller
 
     public function rotate(Request $request, Measure $measure): RedirectResponse
     {
-        Gate::authorize('manage', Measure::class);
+        Gate::authorize('manage', $measure);
 
         app(MeasureCredentialGenerator::class)->generate($measure, $request->user());
 
@@ -64,7 +68,7 @@ class CredentialController extends Controller
 
         $generator = app(MeasureCredentialGenerator::class);
 
-        $count = Measure::orderBy('number')->get()
+        $count = Measure::query()->visibleTo($request->user())->orderBy('number')->get()
             ->each(fn (Measure $measure) => $generator->generate($measure, $request->user()))
             ->count();
 
@@ -73,7 +77,7 @@ class CredentialController extends Controller
 
     public function terminateSessions(Request $request, Measure $measure): RedirectResponse
     {
-        Gate::authorize('manage', Measure::class);
+        Gate::authorize('manage', $measure);
 
         app(MeasureCredentialGenerator::class)->terminateSessions($measure);
 
@@ -82,7 +86,7 @@ class CredentialController extends Controller
 
     public function setExpiry(Request $request, Measure $measure): RedirectResponse
     {
-        Gate::authorize('manage', Measure::class);
+        Gate::authorize('manage', $measure);
 
         $data = $request->validate(['expires_at' => ['nullable', 'date']]);
 

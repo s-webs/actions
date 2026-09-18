@@ -6,19 +6,17 @@ use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 
 /**
- * Три именные роли guard'а `web` — [[Роли и права#Администраторы]]. `proctor` и
- * `coordinator` слиты в единую `administrator` (роль-функция «проректор или другой
- * сотрудник с теми же полномочиями» — по решению заказчика координатор больше не
- * отдельная веб-учётка: заведение этапов теперь делает исполнитель по логину/паролю
- * мероприятия). `developer` — техническая роль с полным доступом, минуя все Policy
- * (см. `Gate::before` в `AppServiceProvider`), плюс просмотр журнала аудита всех
- * пользователей (тот же `/audit`, доступный и `administrator`).
+ * Именные роли guard'а `web`. `proctor` и `coordinator` слиты в единую
+ * `administrator`. `developer` — техническая роль с полным доступом, минуя все
+ * Policy (см. `Gate::before` в `AppServiceProvider`). `responsible` — именной
+ * вход через `/login` со скоупом на свои мероприятия; исполнители по-прежнему
+ * входят по логину мероприятия (guard `measure`).
  */
 class RoleSeeder extends Seeder
 {
     public function run(): void
     {
-        foreach (['developer', 'administrator', 'observer'] as $role) {
+        foreach (['developer', 'administrator', 'observer', 'responsible'] as $role) {
             Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
         }
     }

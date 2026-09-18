@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Calendar;
 use App\Http\Controllers\Controller;
 use App\Models\CalendarFocus;
 use App\Models\Measure;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,9 +17,9 @@ use Inertia\Response;
  */
 class CalendarController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $measures = Measure::with(['latestPeriodState', 'stages'])->get();
+        $measures = Measure::query()->visibleTo($request->user())->with(['latestPeriodState', 'stages'])->get();
 
         $months = CalendarFocus::orderBy('month')->get()->map(function (CalendarFocus $focus) use ($measures) {
             $linked = $measures->filter(function (Measure $m) use ($focus) {

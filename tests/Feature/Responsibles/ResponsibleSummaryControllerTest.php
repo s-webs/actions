@@ -37,7 +37,7 @@ test('measures without a responsible are grouped separately and do not vanish', 
     $this->actingAs($this->user)
         ->get(route('responsibles.index'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('rows', fn ($rows) => collect($rows)->firstWhere('name', 'Без ответственного')['count'] === 1));
+            ->where('rows', fn ($rows) => collect($rows)->firstWhere('name', 'Без должности')['count'] === 1));
 });
 
 test('a responsible with no measures is omitted rather than shown with all zeros', function () {
